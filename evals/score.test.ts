@@ -1,72 +1,151 @@
 import { expect, test } from 'vitest';
-import { scoreRun } from './score.js';
+import { scoreRun, type CaseResult } from './score.js';
 
-const c = (
+/** One grading of one case. `criteria` maps criterion id to the verdict given. */
+function run(
   caseId: string,
-  expectedPassed: boolean,
-  actualPassed: boolean | null,
-) => ({
-  caseId,
-  expected: { passed: expectedPassed, criteria: { c1: expectedPassed } },
-  actual: actualPassed === null ? null : { passed: actualPassed, criteria: [{ id: 'c1', passed: actualPassed, evidence: '' }] },
-  costUsd: 0.01,
-  latencyMs: 1000,
-  cachedInputTokens: 2000,
-});
+  repeat: number,
+  expected: Record<string, boolean>,
+  actual: Record<string, boolean> | null,
+  over: Partial<CaseResult> = {},
+): CaseResult {
+  return {
+    caseId,
+    repeat,
+    expected: { passed: Object.values(expected).every(Boolean), criteria: expected },
+    actual:
+      actual === null
+        ? null
+        : {
+            passed: Object.values(actual).every(Boolean),
+            criteria: Object.entries(actual).map(([id, passed]) => ({ id, passed, evidence: 'x' })),
+          },
+    costUsd: 0.004,
+    latencyMs: 1200,
+    cachedInputTokens: 2000,
+    ...over,
+  };
+}
 
-test('reports perfect accuracy when every verdict matches', () => {
-  const r = scoreRun([c('a', true, true), c('b', false, false)]);
-  expect(r.verdictAccuracy).toBe(1);
-  expect(r.falsePassRate).toBe(0);
-  expect(r.falseFailRate).toBe(0);
-});
-
-test('counts a false pass separately from a false fail', () => {
+test('counts distinct cases and total gradings separately', () => {
   const r = scoreRun([
-    c('a', false, true),
-    c('b', true, false),
-    c('c', true, true),
-    c('d', false, false),
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: true }),
+    run('b', 0, { c1: false }, { c1: false }),
+    run('b', 1, { c1: false }, { c1: false }),
   ]);
-  expect(r.falsePassRate).toBe(0.5);
-  expect(r.falseFailRate).toBe(0.5);
-  expect(r.verdictAccuracy).toBe(0.5);
-});
-
-test('counts errored cases and excludes them from accuracy', () => {
-  const r = scoreRun([c('a', true, true), c('b', true, null)]);
-  expect(r.errored).toBe(1);
   expect(r.cases).toBe(2);
+  expect(r.runs).toBe(4);
+  expect(r.repeats).toBe(2);
+});
+
+test('a fully stable run reports zero flip rates and is stable', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: true }),
+    run('a', 2, { c1: true }, { c1: true }),
+  ]);
+  expect(r.verdictFlipRate).toBe(0);
+  expect(r.criterionFlipRate).toBe(0);
+  expect(r.unstableCriteria).toEqual([]);
+  expect(r.stable).toBe(true);
+});
+
+// The finding this whole module exists for: the grader can answer differently on
+// identical input, so a single run cannot separate a real change from variance.
+test('detects a criterion that answered differently across repeats', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true, c2: true }, { c1: true, c2: true }),
+    run('a', 1, { c1: true, c2: true }, { c1: true, c2: false }),
+    run('a', 2, { c1: true, c2: true }, { c1: true, c2: true }),
+  ]);
+  expect(r.criterionFlipRate).toBeCloseTo(0.5, 10);
+  expect(r.unstableCriteria).toEqual(['a c2']);
+  expect(r.stable).toBe(false);
+});
+
+test('detects a case whose overall verdict differed across repeats', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: false }),
+    run('a', 2, { c1: true }, { c1: true }),
+  ]);
+  expect(r.unstableCases).toBe(1);
+  expect(r.verdictFlipRate).toBe(1);
+});
+
+test('majority verdict takes the modal answer per case, not the first', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: false }),
+    run('a', 1, { c1: true }, { c1: true }),
+    run('a', 2, { c1: true }, { c1: true }),
+  ]);
+  expect(r.majorityVerdictAccuracy).toBe(1);
+  // Per-run accuracy still counts the one wrong answer.
+  expect(r.verdictAccuracy).toBeCloseTo(2 / 3, 10);
+});
+
+test('an even split leaves the majority undecided and the case unstable', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: false }),
+  ]);
+  expect(r.undecidedCases).toBe(1);
+  expect(r.unstableCases).toBe(1);
+});
+
+test('false passes and false fails are counted over every grading', () => {
+  const r = scoreRun([
+    run('cheat', 0, { c1: false }, { c1: true }),
+    run('cheat', 1, { c1: false }, { c1: false }),
+    run('good', 0, { c1: true }, { c1: false }),
+    run('good', 1, { c1: true }, { c1: true }),
+  ]);
+  expect(r.falsePassRate).toBeCloseTo(0.5, 10);
+  expect(r.falseFailRate).toBeCloseTo(0.5, 10);
+});
+
+test('errored gradings are counted and excluded from accuracy', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, null),
+  ]);
+  expect(r.errored).toBe(1);
+  expect(r.runs).toBe(2);
   expect(r.verdictAccuracy).toBe(1);
+  expect(r.trustworthy).toBe(false);
 });
 
-test('sums cost and reports median latency', () => {
-  const r = scoreRun([c('a', true, true), c('b', true, true), c('c', true, true)]);
-  expect(r.totalCostUsd).toBeCloseTo(0.03, 8);
-  expect(r.p50LatencyMs).toBe(1000);
-});
-
-test('reports the cache hit rate so a short prefix is visible', () => {
-  const results = [c('a', true, true), { ...c('b', true, true), cachedInputTokens: 0 }];
-  expect(scoreRun(results).cacheHitRate).toBe(0.5);
+test('a run with one repeat per case cannot claim stability', () => {
+  const r = scoreRun([run('a', 0, { c1: true }, { c1: true })]);
+  expect(r.repeats).toBe(1);
+  expect(r.stable).toBe(false);
+  expect(r.stabilityMeasurable).toBe(false);
 });
 
 test('scores an empty run without dividing by zero', () => {
   const r = scoreRun([]);
   expect(r.cases).toBe(0);
+  expect(r.runs).toBe(0);
   expect(r.verdictAccuracy).toBe(0);
-  expect(r.falsePassRate).toBe(0);
+  expect(r.trustworthy).toBe(false);
+  expect(r.stable).toBe(false);
 });
 
-// I9: an accuracy figure computed over 3 of 20 cases is a trap with money behind it.
-test('marks a run untrustworthy when any case errored', () => {
-  expect(scoreRun([c('a', true, true), c('b', true, null)]).trustworthy).toBe(false);
+test('sums cost across every grading and reports median latency', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: true }),
+    run('a', 2, { c1: true }, { c1: true }),
+  ]);
+  expect(r.totalCostUsd).toBeCloseTo(0.012, 8);
+  expect(r.p50LatencyMs).toBe(1200);
 });
 
-test('marks a run trustworthy only when every case was graded', () => {
-  expect(scoreRun([c('a', true, true), c('b', false, false)]).trustworthy).toBe(true);
-});
-
-test('an empty run is not trustworthy', () => {
-  expect(scoreRun([]).trustworthy).toBe(false);
+test('reports the cache hit rate over gradings', () => {
+  const r = scoreRun([
+    run('a', 0, { c1: true }, { c1: true }),
+    run('a', 1, { c1: true }, { c1: true }, { cachedInputTokens: 0 }),
+  ]);
+  expect(r.cacheHitRate).toBe(0.5);
 });
