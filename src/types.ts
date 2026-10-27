@@ -1,0 +1,43 @@
+export const CRITERION_KINDS = [
+  'root_cause',
+  'behaviour',
+  'anti_shortcut',
+  'no_regression',
+] as const;
+
+export type CriterionKind = (typeof CRITERION_KINDS)[number];
+export type Visibility = 'editable' | 'readonly' | 'hidden';
+
+export interface QuestionFile {
+  path: string;
+  content: string;
+  visibility: Visibility;
+}
+
+export interface SubmittedFile {
+  path: string;
+  content: string;
+}
+
+export interface RubricCriterion {
+  id: string;
+  kind: CriterionKind;
+  description: string;
+}
+
+export interface CriterionVerdict {
+  id: string;
+  passed: boolean;
+  evidence: string;
+}
+
+export interface Verdict {
+  criteria: CriterionVerdict[];
+  passed: boolean;
+}
+
+export interface Usage {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+}
