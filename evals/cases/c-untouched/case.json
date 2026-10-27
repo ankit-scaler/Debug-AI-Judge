@@ -1,0 +1,43 @@
+{
+  "questionId": "zomato-unhandled-error-status",
+  "questionVersion": 1,
+  "entry": "src/App.jsx",
+  "scenario": "You are on the Zomato discovery team. Support has escalated a bug affecting users in several cities.",
+  "symptom": "For some cities the restaurant page renders completely blank instead of showing anything.",
+  "visibility": {
+    "src/RestaurantList.jsx": "editable",
+    "src/App.jsx": "readonly",
+    "mock/handlers.js": "readonly"
+  },
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "The response status is checked and a failed status prevents the response body from being used as though the request had succeeded."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "When the API returns a non-2xx status, the component's existing error message is displayed instead of a blank page."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The failure is not hidden by rendering an empty list as though the request had succeeded, and the existing error UI is not removed or bypassed."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "A successful response still renders the list of restaurant names."
+    }
+  ],
+  "expected": {
+    "passed": false,
+    "criteria": {
+      "c1": false,
+      "c2": false,
+      "c3": true,
+      "c4": true
+    }
+  }
+}

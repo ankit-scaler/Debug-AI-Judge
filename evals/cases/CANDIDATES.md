@@ -72,7 +72,7 @@ the error state that already exists in the component.
 
 ## Why these twenty
 
-- **5 expected passes, 14 expected fails.** Deliberately fail-weighted: a grader
+- **7 expected passes, 12 expected fails.** Deliberately fail-weighted: a grader
   that waves things through is the failure that costs points, and most of the set
   exists to catch it.
 - **No build-failure case.** A 20th candidate (`a-broken-build`, an unclosed JSX

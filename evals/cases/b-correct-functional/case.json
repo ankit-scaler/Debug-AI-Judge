@@ -1,0 +1,43 @@
+{
+  "questionId": "swiggy-order-timer-stale-closure",
+  "questionVersion": 1,
+  "entry": "src/App.jsx",
+  "scenario": "You are on the Swiggy order-tracking team. QA has filed a bug against the live order screen.",
+  "symptom": "The elapsed-time counter on the order screen shows 1s and never moves after that.",
+  "visibility": {
+    "src/OrderTimer.jsx": "editable",
+    "src/App.jsx": "readonly",
+    "src/OrderStatus.jsx": "readonly"
+  },
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "The interval's state update does not depend on a seconds value captured when the effect first ran."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "The displayed elapsed time keeps increasing every second, past 1."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The displayed value still advances from a running timer. It is not produced by literal values, a precomputed sequence, or a figure computed once per render with nothing triggering a re-render."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "The interval is still cleared when the component unmounts."
+    }
+  ],
+  "expected": {
+    "passed": true,
+    "criteria": {
+      "c1": true,
+      "c2": true,
+      "c3": true,
+      "c4": true
+    }
+  }
+}
