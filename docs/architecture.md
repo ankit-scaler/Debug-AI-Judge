@@ -298,13 +298,22 @@ full pass scores; leaderboard ranked by total score, ties broken by total elapse
 
 ## 8. Not yet verified
 
-Nothing here has been built or run. Specifically unverified: Monaco + Sandpack
-integration, the esbuild build gate on Vercel's runtime, interceptor behaviour
-inside the Sandpack iframe, and whether OpenRouter's Anthropic endpoints advertise
-`structured_outputs` in their Providers section (see §9).
+Phase 1 (the grading core and eval harness, §3-§4) is **built and tested**: 102
+tests across 13 files, `tsc --noEmit` clean, `npm audit` clean, and a fresh-context
+whole-branch review whose four Critical and ten Important findings have all been
+fixed. OpenRouter model IDs, caching behaviour, both cache multipliers, the usage
+field shape, the token-accounting convention and the fee model were verified
+against live responses and docs on 2026-10-27 (§9).
 
-OpenRouter model IDs, caching, structured outputs and fees were verified on
-2026-10-27 — see §9.
+Still unverified, all in later phases: Monaco + Sandpack integration, the esbuild
+build gate on Vercel's runtime (it runs correctly on Node 22 locally), interceptor
+behaviour inside the Sandpack iframe, and whether OpenRouter's Anthropic endpoints
+advertise `structured_outputs` in their Providers section — `require_parameters`
+is sent, and every verdict is validated server-side regardless.
+
+**No grader accuracy number exists yet.** The golden dataset is drafted and
+awaiting approval at `evals/cases/CANDIDATES.md`; until the baseline runs, nothing
+is known about whether the grader is fit to award points.
 
 ## 9. OpenRouter — verified 2026-10-27
 
@@ -313,11 +322,13 @@ Checked against OpenRouter's own docs and pricing pages.
 ### Fees
 - **No markup on inference.** "Inference is billed at the provider's list price on
   every plan." The platform fee applies only when buying credits.
-- **Credit purchase fee: 5.5%** on the Standard plan, 8% on Business. Enterprise
-  is negotiated.
-- So Claude list prices apply, plus 5.5% on top-ups. Haiku 5.5 is $0.10/$0.50 per
-  MTok and Opus 5.5 is $4/$20.
-- BYOK: $25,000/month of list-price inference included, then 5% of list.
+- **Credit purchase fee: 5.5%** on the Standard plan, 8% on Business.
+- **This account is BYOK** — a live response on 2026-10-27 returned
+  `is_byok: true` and `usage.cost: 0`, meaning an Anthropic key is routed through
+  OpenRouter. So **no credit-purchase fee applies**: Anthropic list prices are paid
+  directly, and OpenRouter charges 5% of list only on usage above $25,000/month,
+  which a pilot will not approach. Every "plus the 5.5% credit fee" elsewhere in
+  this document does not apply to this account.
 
 ### Model IDs
 `anthropic/claude-haiku-5.5` confirmed on its model page; the family follows
@@ -328,6 +339,26 @@ the grader has to be pinned for the eval to mean anything.
 ### Prompt caching — supported, and a real cost lever
 - `cache_control: {type: "ephemeral"}` either top-level (auto, breakpoint advances
   with the conversation) or on individual content blocks, up to 4 explicit breakpoints.
+- **Measured end to end on 2026-10-27** with two identical calls over a
+  ~5.5K-token cached prefix:
+
+  | | call 1 (write) | call 2 (read) |
+  |---|---|---|
+  | `prompt_tokens` | 5521 | 5521 |
+  | `cached_tokens` | 0 | 5511 |
+  | `cache_write_tokens` | 5511 | 0 |
+  | `upstream_inference_prompt_cost` | $0.02070 | $0.00168 |
+
+  Both figures reproduce exactly from the list price: 5511 x $3/MTok x **1.25** for
+  the write, and 5511 x $3/MTok x **0.1** plus 10 fresh tokens for the read.
+  Crucially, **`cached_tokens` and `cache_write_tokens` are subsets of
+  `prompt_tokens`**, not additions to it — the whole cached prefix still appears in
+  the input total. The cost model in `src/grading/cost.ts` is pinned to these
+  measurements by two regression tests.
+- **The provider reports its own cost.** `cost_details.upstream_inference_cost` is
+  the authoritative spend figure (`usage.cost` is 0 on a BYOK key). Our price table
+  is kept as a cross-check: a divergence above 25% is recorded as a warning on the
+  usage row rather than silently trusted.
 - **Cache reads cost 0.1x** the input price. Writes are 1.25x for the 5-minute
   default, 2x with `ttl: "1h"`.
 - Minimum cacheable prefix is **1,024 tokens for Sonnet 4.6** (512 for Sonnet 5.5,

@@ -127,3 +127,22 @@ went against the recommendation, that is noted explicitly.
     5,000-submit pilot, plus the 5.5% credit fee.
   - Haiku 5.5 remains the model for learner feedback; the eval decides whether it
     is also adequate for grading.
+
+### D10. OpenRouter token accounting and cost source (measured 2026-10-27)
+- **Decision:** record the provider's own cost figure
+  (`cost_details.upstream_inference_cost`, falling back to `usage.cost`) as the
+  authoritative spend, and keep the local price table as a cross-check that warns
+  on a divergence above 25%. Price cache writes at 1.25x and cache reads at 0.1x.
+  Treat `cached_tokens` and `cache_write_tokens` as subsets of `prompt_tokens`.
+- **Reason:** measured, not assumed. Two identical calls over a ~5.5K-token cached
+  prefix returned write cost $0.02070 and read cost $0.00168, both of which
+  reproduce exactly from list price at those multipliers, and `cached_tokens`
+  (5511) came back below `prompt_tokens` (5521).
+- **Also found:** this account is BYOK (`is_byok: true`, `usage.cost: 0`), so the
+  5.5% credit-purchase fee does not apply — Anthropic list price is paid directly,
+  with OpenRouter taking 5% of list only above $25,000/month. Pilot cost estimates
+  in D8/D9 are therefore slightly conservative.
+- **Consequence:** a price-table drift becomes a visible warning on the usage row
+  instead of a wrong cost centre. `costUsd` no longer throws on an impossible
+  usage shape — it clamps and flags, because that code runs with a learner waiting.
+- **Cost of the measurement:** about $0.02, with the user's explicit approval.
