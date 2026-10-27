@@ -2,7 +2,13 @@ import { expect, test, vi } from 'vitest';
 import { callModel } from './openrouter.js';
 
 function reply(body: unknown, status = 200) {
-  return vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+  // Typed with fetch's signature so the assertions below can read the init argument.
+  return vi.fn(async (_url: string | URL | Request, _init?: RequestInit) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    }),
+  );
 }
 
 const ok = {

@@ -5,13 +5,15 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
-    "eval": "node --experimental-strip-types evals/run.ts"
+    "eval": "tsx evals/run.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "esbuild": "0.28.2"
   },
   "devDependencies": {
     "@types/node": "22.13.1",
+    "tsx": "4.23.15",
     "typescript": "5.7.2",
     "vitest": "5.0.5"
   }
