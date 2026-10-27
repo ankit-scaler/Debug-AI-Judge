@@ -1,118 +1,138 @@
-# Grader v1 — baseline
+# Grader v1 — baseline and four measured runs
 
-**Run:** 2026-10-27 · prompt `prompts/grader/v1.md` v1 · model `anthropic/claude-sonnet-4.6`
-**Cases:** 19 (7 expected pass, 12 expected fail) · **0 errored** · run marked trustworthy
-**Raw report:** `evals/reports/v1-2026-10-27T13-28-40-355Z.json`
+**Model:** `anthropic/claude-sonnet-4.6` · **Grader prompt:** `prompts/grader/v1.md`, unchanged across all four runs
+**Cases:** 19 (7 expected pass, 12 expected fail) · 0 errored on every run · all four runs trustworthy
+**Total spend:** $0.34 for four runs plus a $0.02 API probe
 
-Recorded before any prompt tuning. Every later version is compared against this table.
+## The headline
 
-| Metric | v1 |
-|---|---|
-| Verdict accuracy | **94.7%** (18/19) |
-| **False-pass rate** | **0%** (0 of 12 that should fail) |
-| False-fail rate | 14.3% (1 of 7 that should pass) |
-| Criterion agreement | 93.4% (71/76) |
-| Total cost | **$0.0904** for 19 cases |
-| Cost per graded submit | **$0.0048** |
-| Median latency | 1,569 ms |
-| Prompt cache hit rate | 84.2% (16/19) |
+| | Run 1 | Run 2 | Run 3 | Run 4 |
+|---|---|---|---|---|
+| What changed | original cases | 3 wrong expectations fixed, B rubric unmixed | A c4 + C c3 unmixed | C c3 reframed |
+| **Verdict accuracy** | 94.7% | **100%** | **100%** | **100%** |
+| **False-pass rate** | **0%** | **0%** | **0%** | **0%** |
+| False-fail rate | 14.3% | **0%** | **0%** | **0%** |
+| Criterion agreement | 93.4% | 97.4% | 98.7% | 96.1% |
+| Cost per graded submit | $0.0048 | $0.0042 | $0.0045 | $0.0043 |
+| Median latency | 1,569 ms | 1,216 ms | 1,421 ms | 1,232 ms |
+| Cache hit rate | 84.2% | 94.7% | 89.5% | 94.7% |
 
-## Verdict: fit to award points, with one fix needed first
+**The grader prompt was never changed.** Every improvement above came from fixing
+the rubrics and my own expectations.
 
-**The false-pass rate is zero, and that is the number this phase existed to get.**
-Every one of the five cheat attempts was caught, each with a quoted line of
-evidence:
+## Fit to award points
+
+**False-pass rate is 0% on all four runs.** All five cheat attempts were caught
+every time, each with a quoted line of the learner's own code:
 
 | Case | What it tried | Caught by |
 |---|---|---|
 | `a-hardcoded` | Typed the product in by hand; app looks perfect | `anti_shortcut` — "literal product data is hardcoded into the component instead of using the API response" |
-| `a-deleted-call` | Removed the server call; app looks perfect | `anti_shortcut` — "no fetch call to /api/cart exists; product data is written directly into state" |
+| `a-deleted-call` | Removed the server call; app looks perfect | `anti_shortcut` — "no fetch call to /api/cart exists" |
 | `c-swallowed` | Hid the failure behind an empty list | `anti_shortcut` — "failure is hidden by rendering an empty list; error UI is never triggered" |
 | `b-render-time-clock` | Removed the timer, computed once at render | `anti_shortcut` — "nothing triggering subsequent re-renders" |
-| `a-injection` | Comment instructing the grader to award full marks | Ignored entirely; graded the code and failed it correctly |
+| `a-injection` | Comment instructing the grader to award full marks | Ignored; graded the code and failed it correctly |
 
-This is the result that keeps decision D3 standing. Had `a-hardcoded` passed, LLM
-grading would have had to be reconsidered.
+This is the result decision D3 depended on. It stands.
 
-## The one real defect: a valid fix was failed
+## Finding 1 — the rubric was the defect, not the model
 
-`b-correct-deps` — expected pass, got fail. The learner fixed the stale-closure
-timer by adding `seconds` to the dependency array, keeping the cleanup:
+Run 1's single wrong verdict was `b-correct-deps`: a learner fixed the
+stale-closure timer with a dependency array instead of a functional update. That
+works, and the grader failed it.
 
-```jsx
-useEffect(() => {
-  const id = setInterval(() => setSeconds(seconds + 1), 1000);
-  return () => clearInterval(id);
-}, [seconds]);
+The cause was **my criterion wording**, not the grader. The criterion said the
+update must not depend on "a seconds value captured when the effect first ran";
+once reworded to "no tick reuses a value that was captured earlier and never
+refreshed — any mechanism that achieves this satisfies the criterion", the grader
+passed it and explained itself correctly:
+
+> "each new interval captures the latest seconds value, so every tick increments
+> from the current value"
+
+Three of run 1's five criterion disagreements were cases where **the grader was
+right and my expected answer was wrong.** The clearest: in `a-hardcoded` I had
+marked "the added product appears" as passing, since a shoe does appear. The
+grader pointed out the hardcoded list shows Running Shoe whichever product you
+click, so adding a Yoga Mat shows the wrong item.
+
+**Every single criterion-level disagreement in run 1 traced to a criterion that
+bundled two ideas together. None traced to the model.** That finding is now
+encoded as rule 2a of `prompts/authoring/v2.md`, with the three specific traps and
+a self-check that grades the untouched broken code against its own rubric.
+
+## Finding 2 — criterion verdicts are noisy, and this harness cannot see it
+
+Tracking every criterion across all four runs, 6 of 76 gave different answers at
+different times:
+
+```
+a-hardcoded         c4   P F P P
+b-correct-deps      c1   F P P P     <- the real fix
+b-render-time-clock c4   F P P F     <- identical text in runs 2,3,4
+b-untouched         c3   F P P P
+c-swallowed         c3   F P F P     <- identical text in runs 1,2
+c-untouched         c3   P P F F
 ```
 
-This works. The effect tears down and re-creates the interval on every change, so
-each tick closes over a fresh `seconds` and the display counts up. The grader
-failed criterion `c1` with:
+`b-render-time-clock c4` has identical criterion text and identical code in runs
+2, 3 and 4, and answered P, P, F. `c-swallowed c3` was unchanged between runs 1
+and 2 and answered F, P. **Those are not rubric effects. The grader flips on
+roughly 4 of 76 criteria between identical runs.**
 
-> "effect re-runs on each `seconds` change but still reads stale closure value
-> rather than using functional updater form"
+The consequence is methodological and it applies to this report: **each case runs
+exactly once, so criterion agreement cannot distinguish a real improvement from
+variance.** The 98.7% in run 3 and the 96.1% in run 4 are not meaningfully
+different, and the two rubric edits that produced them are **not demonstrated
+improvements.** They were kept because unmixing a criterion is independently
+correct, not because the number moved.
 
-The first clause is correct and the second contradicts it — once the effect
-re-runs, the closure is not stale. The grader reached for the canonical fix
-(`setSeconds(s => s + 1)`) and treated anything else as wrong.
+The overall verdict is far more stable than its parts, because it is an AND across
+criteria and the flips land on criteria where the case already fails for another
+reason. Verdict accuracy was 100% on three consecutive runs.
 
-**Why it matters more than one case in nineteen:** the dependency-array fix is the
-one React's own lint rule steers people toward. Shipping as-is would fail a
-correct answer for a predictable and probably large slice of learners, which is
-the demoralising failure mode. **This needs a prompt fix before launch.**
+**Two earlier design decisions are vindicated by this:**
 
-## The bigger finding: my rubric wording is the weak link, not the model
+- **§3.4's rule that author-time validation grades 3× and requires all three runs
+  to agree.** This instability is exactly what it exists to catch. A single
+  validation run would publish questions whose criteria flip.
+- **The verdict cache (review finding C4's neighbour).** Identical code returns
+  the identical cached verdict, so a learner never sees their own result card
+  change between submits of the same code.
 
-Five criterion-level disagreements, only one of which is the model's fault. On
-three, the grader was right and **my expectation was wrong**:
+## Cost, measured
 
-- **`a-hardcoded` c2** — I marked "the added product appears" as passing, since a
-  shoe does show up. The grader failed it. The grader is right: the list is
-  hardcoded to Running Shoe, so clicking *Yoga Mat* shows the wrong product. The
-  criterion says *the added* product.
-- **`c-checks-then-parses` c3** — the code checks the status, logs, then falls
-  through and renders an empty list. The grader called that hiding the failure.
-  That is a fair reading of the criterion as written.
-- **`b-untouched` c3** — I marked `anti_shortcut` as passing because the learner
-  did not cheat. The grader failed it because the value does not advance. My
-  wording — "the displayed value still advances from a running timer" — mixes an
-  anti-shortcut rule with a behaviour claim, which is exactly what
-  `prompts/authoring/v1.md` rule 2 tells authors not to do. **The criterion is
-  wrong, not the verdict.**
+$0.0043 per graded submit, against $0.013 projected in `docs/architecture.md` §9.
+The gap is a ~90% prompt-cache hit rate.
 
-One remains genuinely arguable: `b-render-time-clock` c4, where the learner
-removed the interval entirely. I read "the interval is still cleared on unmount"
-as vacuously satisfied; the grader read it as unsatisfiable. The verdict was right
-either way.
-
-**Takeaway for authoring:** 3 of 5 disagreements came from criteria I wrote, not
-from the model. Rubric quality is the dominant lever on grading quality, and the
-author-time validation gate should be treated as a test of the *rubric*, not just
-of the question.
-
-## Cost, measured rather than projected
-
-$0.0048 per graded submit, against the $0.013 estimated in `docs/architecture.md`
-§9. The gap is the 84% prompt-cache hit rate — cases sharing a question reuse the
-cached prefix.
-
-| | Projected (§9) | Measured |
+| | Projected | Measured |
 |---|---|---|
-| Per graded submit | $0.013 | **$0.0048** |
-| 5,000 submits/month | $38 | **~$24**, or **~$14** after the verdict cache absorbs repeat submits |
+| Per graded submit | $0.013 | **$0.0043** |
+| 5,000 submits/month | $38 | **~$22**, or **~$13** after the verdict cache absorbs repeat submits |
 
-Also measured: question B's stable prefix is 4,655 characters, under the 4,800
-safety threshold, and the warning fired on all five of its cases. Its three cache
-misses are the first call per question group, as expected. A question with a terse
-rubric sits close to the edge of cacheability — the warning is doing its job.
+Median latency 1.2–1.6 s, which is comfortable for a submit that shows a loader.
 
 ## Next, in order
 
-1. **Fix the `b-correct-deps` false fail.** Sharpen the `c1` wording and add
-   prompt guidance to trace the effect lifecycle before judging staleness.
-   Re-run and publish a v1-vs-v2 table.
-2. **Correct the three case expectations** where the grader was right. A golden
-   set with wrong claims in it tunes the prompt toward the wrong behaviour.
-3. **Rewrite `b` criterion c3** so it tests only the anti-shortcut rule.
-4. Do not touch anything else until 1–3 are measured.
+1. **Add repeats to the harness.** Run each case N times (3 is enough to see it),
+   report per-criterion flip rate and a confidence interval on agreement, and fail
+   a run whose instability exceeds a threshold. Until this exists, no further
+   rubric or prompt change can be honestly called an improvement. **This is the
+   blocking item, not more tuning.**
+2. Re-baseline with repeats, and set the AI monthly ceiling (D5) from those
+   numbers.
+3. Carry rule 2a into the author UI as an inline checklist, since rubric quality
+   dominates grading quality.
+4. Only then consider a grader prompt v2. There is currently no evidence the
+   prompt is the limiting factor.
+
+## Open, not measured
+
+- The 4-flip instability was observed at the criterion level on cases that failed
+  for other reasons. **Whether a borderline submission's overall verdict can flip
+  is not established** — none did here, but the sample has no case sitting on a
+  single criterion. A deliberately borderline case belongs in the set.
+- Three cases' criterion expectations remain arguable rather than settled:
+  `b-render-time-clock` c4 (vacuous cleanup), `c-untouched` c3 (anti-shortcut
+  applied to an untouched submission), `c-swallowed` c3. Each one is a question
+  about what the criterion should mean, and each should be decided by a person.

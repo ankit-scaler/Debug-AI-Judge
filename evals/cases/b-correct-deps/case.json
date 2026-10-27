@@ -1,6 +1,6 @@
 {
   "questionId": "swiggy-order-timer-stale-closure",
-  "questionVersion": 1,
+  "questionVersion": 2,
   "entry": "src/App.jsx",
   "scenario": "You are on the Swiggy order-tracking team. QA has filed a bug against the live order screen.",
   "symptom": "The elapsed-time counter on the order screen shows 1s and never moves after that.",
@@ -13,7 +13,7 @@
     {
       "id": "c1",
       "kind": "root_cause",
-      "description": "The interval's state update does not depend on a seconds value captured when the effect first ran."
+      "description": "Every tick increments from the current elapsed value. No tick reuses a value that was captured earlier and never refreshed. Any mechanism that achieves this satisfies the criterion."
     },
     {
       "id": "c2",
@@ -23,12 +23,12 @@
     {
       "id": "c3",
       "kind": "anti_shortcut",
-      "description": "The displayed value still advances from a running timer. It is not produced by literal values, a precomputed sequence, or a figure computed once per render with nothing triggering a re-render."
+      "description": "The elapsed value is not faked. It is not a literal, not a precomputed sequence, and not a value computed once with nothing causing any further update. This criterion is about faking the value only; whether the value is correct is covered elsewhere."
     },
     {
       "id": "c4",
       "kind": "no_regression",
-      "description": "The interval is still cleared when the component unmounts."
+      "description": "If the component sets up an interval, timeout or subscription, it is cleared when the component unmounts. A component that sets up none satisfies this criterion."
     }
   ],
   "expected": {

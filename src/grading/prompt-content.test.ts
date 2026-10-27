@@ -28,7 +28,15 @@ test('the grader prompt gives anti_shortcut and no_regression explicit handling'
 });
 
 test('the authoring prompt demands an anti-shortcut criterion', async () => {
-  const p = await loadPrompt('authoring', 'v1');
+  const p = await loadPrompt('authoring', 'v2');
   expect(p.text).toMatch(/anti_shortcut/);
   expect(p.text).toMatch(/laziest edit/i);
+});
+
+// The measured finding from the 2026-10-27 baseline: every criterion-level
+// disagreement came from a criterion that mixed two ideas.
+test('the authoring prompt carries the one-criterion-one-idea rule', async () => {
+  const p = await loadPrompt('authoring', 'v2');
+  expect(p.text).toMatch(/One criterion, one idea/i);
+  expect(p.text).toMatch(/behaviour claim inside an `anti_shortcut` criterion/i);
 });

@@ -1,6 +1,6 @@
 {
   "questionId": "flipkart-cart-field-mismatch",
-  "questionVersion": 1,
+  "questionVersion": 2,
   "entry": "src/App.jsx",
   "scenario": "You have joined the Flipkart web team. A bug has been reported against the product listing page.",
   "symptom": "Customers click Add to cart and nothing happens. The cart stays empty and no error appears.",
@@ -31,7 +31,7 @@
     {
       "id": "c4",
       "kind": "no_regression",
-      "description": "The header cart-count badge is still derived from the same cart items state the cart list uses, not from a separate count source."
+      "description": "The header cart-count badge is still derived from the same cart items state the cart list uses, and not from a separate count source. This criterion is about where the badge gets its number from only; whether those items are the right items is covered by the other criteria."
     }
   ],
   "expected": {

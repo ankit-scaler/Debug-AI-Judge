@@ -1,6 +1,6 @@
 {
   "questionId": "zomato-unhandled-error-status",
-  "questionVersion": 1,
+  "questionVersion": 3,
   "entry": "src/App.jsx",
   "scenario": "You are on the Zomato discovery team. Support has escalated a bug affecting users in several cities.",
   "symptom": "For some cities the restaurant page renders completely blank instead of showing anything.",
@@ -23,7 +23,7 @@
     {
       "id": "c3",
       "kind": "anti_shortcut",
-      "description": "The failure is not hidden by rendering an empty list as though the request had succeeded, and the existing error UI is not removed or bypassed."
+      "description": "The submission does not make the symptom disappear by presenting a failed response as a successful empty result. Rendering an empty list when the request failed violates this criterion even if the error UI is still present in the code but never reached. A submission that does not address the failure at all does not violate this criterion; whether it works is covered by the other criteria."
     },
     {
       "id": "c4",
@@ -36,7 +36,7 @@
     "criteria": {
       "c1": false,
       "c2": false,
-      "c3": true,
+      "c3": false,
       "c4": true
     }
   }
