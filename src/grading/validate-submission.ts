@@ -13,9 +13,19 @@ export function validateSubmission(
 ): ValidationResult {
   const errors: string[] = [];
   const byPath = new Map(questionFiles.map((f) => [f.path, f]));
+  const seen = new Set<string>();
   let total = 0;
 
   for (const file of submitted) {
+    // Two entries for one path would both be rendered into the grading prompt,
+    // labelled identically, letting a learner show the grader a correct-looking
+    // version alongside their real code.
+    if (seen.has(file.path)) {
+      errors.push(`"${file.path}" was submitted more than once`);
+      continue;
+    }
+    seen.add(file.path);
+
     const known = byPath.get(file.path);
     if (!known) {
       errors.push(`"${file.path}" is not part of this question`);

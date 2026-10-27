@@ -69,6 +69,13 @@ export function parseVerdict(raw: unknown, rubric: RubricCriterion[]): ParsedVer
     if (typeof c.evidence !== 'string') {
       return { ok: false, reason: `Criterion "${c.id}" has a non-string evidence field` };
     }
+    // A pass must be evidenced. This is the only thing standing between a
+    // fabricated pass and a score, and the prompt alone cannot enforce it: §9
+    // records that some providers treat the schema as a hint. A fail needs no
+    // evidence, since a fail awards nothing.
+    if (c.passed === true && c.evidence.trim() === '') {
+      return { ok: false, reason: `Criterion "${c.id}" passed with no evidence` };
+    }
     if (!expected.has(c.id)) {
       return { ok: false, reason: `Criterion "${c.id}" is not in the rubric` };
     }

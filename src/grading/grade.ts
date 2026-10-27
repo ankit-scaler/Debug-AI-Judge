@@ -1,8 +1,8 @@
 import { assembleGradingMessages } from './assemble-prompt.js';
 import { buildCheck, type BuildError } from './build-gate.js';
-import { costUsd, GRADER_MODEL } from './cost.js';
+import { GRADER_MODEL, priceUsage } from './cost.js';
 import { submissionHash } from './hash.js';
-import { callModel as defaultCallModel } from './openrouter.js';
+import { callModel as defaultCallModel, ModelCallError } from './openrouter.js';
 import { validateSubmission } from './validate-submission.js';
 import { parseVerdict, verdictJsonSchema } from './verdict-schema.js';
 import type { QuestionFile, RubricCriterion, SubmittedFile, Usage, Verdict } from '../types.js';
@@ -17,6 +17,10 @@ export interface UsageRecord {
   costUsd: number;
   latencyMs: number;
   cacheHit: boolean;
+  /** Set when the assembled stable prefix looked too short to cache. */
+  cacheWarning: string | null;
+  /** Pricing anomalies, e.g. a divergence from the provider's own cost figure. */
+  costWarnings: string[];
 }
 
 export interface GradeInput {
@@ -84,6 +88,27 @@ export async function grade(input: GradeInput, deps: GradeDeps): Promise<GradeOu
     submitted: input.submitted,
   });
 
+  const record = async (
+    usage: Parameters<typeof priceUsage>[1],
+    latencyMs: number,
+  ): Promise<number> => {
+    const priced = priceUsage(GRADER_MODEL, usage);
+    await deps.spend.record({
+      userId: deps.userId,
+      questionId: input.questionId,
+      feature: 'grade',
+      model: GRADER_MODEL,
+      promptVersion: deps.promptVersion,
+      usage,
+      costUsd: priced.costUsd,
+      latencyMs,
+      cacheHit: false,
+      cacheWarning: assembled.cacheWarning,
+      costWarnings: priced.warnings,
+    });
+    return priced.costUsd;
+  };
+
   let response;
   try {
     response = await deps.callModel(
@@ -96,21 +121,15 @@ export async function grade(input: GradeInput, deps: GradeDeps): Promise<GradeOu
       { fetch: deps.fetchImpl ?? fetch, apiKey: deps.apiKey ?? '' },
     );
   } catch (err) {
+    // A 200 that was billed but unusable still has usage attached. Ledger it
+    // before returning, or the spend ceiling silently drifts below reality.
+    if (err instanceof ModelCallError && err.usage) {
+      await record(err.usage, err.latencyMs ?? 0);
+    }
     return { status: 'system_error', reason: `Model call failed: ${(err as Error).message}` };
   }
 
-  const cost = costUsd(GRADER_MODEL, response.usage);
-  await deps.spend.record({
-    userId: deps.userId,
-    questionId: input.questionId,
-    feature: 'grade',
-    model: GRADER_MODEL,
-    promptVersion: deps.promptVersion,
-    usage: response.usage,
-    costUsd: cost,
-    latencyMs: response.latencyMs,
-    cacheHit: false,
-  });
+  const cost = await record(response.usage, response.latencyMs);
 
   const parsed = parseVerdict(response.raw, input.rubric);
   if (!parsed.ok) {

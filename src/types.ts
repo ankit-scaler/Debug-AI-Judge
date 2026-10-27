@@ -37,7 +37,13 @@ export interface Verdict {
 }
 
 export interface Usage {
+  /** Total prompt tokens. Verified 2026-10-27: includes cached and cache-write tokens. */
   inputTokens: number;
   outputTokens: number;
+  /** Subset of inputTokens served from cache, billed at 0.1x. */
   cachedInputTokens: number;
+  /** Subset of inputTokens written to cache, billed at 1.25x (5-minute TTL). */
+  cacheWriteInputTokens: number;
+  /** The provider's own cost figure, when it reports one. Authoritative over our price table. */
+  reportedCostUsd: number | null;
 }

@@ -19,6 +19,9 @@ export interface EvalReport {
   totalCostUsd: number;
   p50LatencyMs: number;
   cacheHitRate: number;
+  /** False when any case errored, or when there are no cases. An accuracy figure
+   *  computed over a subset is not a baseline. */
+  trustworthy: boolean;
 }
 
 function ratio(numerator: number, denominator: number): number {
@@ -57,5 +60,6 @@ export function scoreRun(results: CaseResult[]): EvalReport {
     totalCostUsd: results.reduce((sum, r) => sum + r.costUsd, 0),
     p50LatencyMs: latencies.length === 0 ? 0 : latencies[Math.floor(latencies.length / 2)]!,
     cacheHitRate: ratio(graded.filter((r) => r.cachedInputTokens > 0).length, graded.length),
+    trustworthy: results.length > 0 && graded.length === results.length,
   };
 }

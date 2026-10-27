@@ -57,3 +57,16 @@ test('scores an empty run without dividing by zero', () => {
   expect(r.verdictAccuracy).toBe(0);
   expect(r.falsePassRate).toBe(0);
 });
+
+// I9: an accuracy figure computed over 3 of 20 cases is a trap with money behind it.
+test('marks a run untrustworthy when any case errored', () => {
+  expect(scoreRun([c('a', true, true), c('b', true, null)]).trustworthy).toBe(false);
+});
+
+test('marks a run trustworthy only when every case was graded', () => {
+  expect(scoreRun([c('a', true, true), c('b', false, false)]).trustworthy).toBe(true);
+});
+
+test('an empty run is not trustworthy', () => {
+  expect(scoreRun([]).trustworthy).toBe(false);
+});

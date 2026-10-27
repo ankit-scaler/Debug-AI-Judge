@@ -74,3 +74,39 @@ test('rejects a non-boolean passed field', () => {
   );
   expect(r.ok).toBe(false);
 });
+
+// I1: evidence is the only anti-fabrication mechanism in the design. The prompt
+// demands it; nothing enforced it.
+test('rejects a passing criterion with no evidence', () => {
+  const r = parseVerdict(
+    { criteria: [
+      { id: 'c1', passed: true, evidence: '' },
+      { id: 'c2', passed: true, evidence: 'no literal array present' },
+    ], passed: true },
+    rubric,
+  );
+  expect(r.ok).toBe(false);
+  expect(r.ok === false && r.reason).toMatch(/evidence/i);
+});
+
+test('rejects a passing criterion whose evidence is only whitespace', () => {
+  const r = parseVerdict(
+    { criteria: [
+      { id: 'c1', passed: true, evidence: '   \n  ' },
+      { id: 'c2', passed: true, evidence: 'x' },
+    ], passed: true },
+    rubric,
+  );
+  expect(r.ok).toBe(false);
+});
+
+test('allows a failing criterion with no evidence, since a fail awards nothing', () => {
+  const r = parseVerdict(
+    { criteria: [
+      { id: 'c1', passed: false, evidence: '' },
+      { id: 'c2', passed: true, evidence: 'x' },
+    ], passed: false },
+    rubric,
+  );
+  expect(r.ok).toBe(true);
+});

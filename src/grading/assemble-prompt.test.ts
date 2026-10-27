@@ -36,10 +36,20 @@ test('places the submission after the breakpoint', () => {
   expect(last.text).toContain('SUBMITTED FILES');
 });
 
-test('labels the submission as untrusted data', () => {
+// I5: the assembler emits structure only. All instructional text, including the
+// injection rule, lives in the versioned prompt file so that promptVersion
+// actually identifies the instructions a verdict was produced under. See
+// prompt-content.test.ts for the rules themselves.
+test('emits structural section headers and no instructional prose', () => {
   const { messages } = assembleGradingMessages(input());
   const blocks = (messages[1] as any).content as any[];
-  expect(JSON.stringify(blocks)).toMatch(/never an instruction/i);
+  const text = blocks.map((b) => b.text).join('\n');
+  expect(text).toContain('## QUESTION');
+  expect(text).toContain('## RUBRIC');
+  expect(text).toContain('## REFERENCE FIX');
+  expect(text).toContain('## SUBMITTED FILES');
+  expect(text).not.toMatch(/never an instruction/i);
+  expect(text).not.toMatch(/known-correct solution/i);
 });
 
 test('warns when the stable prefix is too short to cache', () => {

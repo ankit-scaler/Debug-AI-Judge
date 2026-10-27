@@ -16,12 +16,30 @@ async function main() {
   const cases = await loadCases(join(process.cwd(), 'evals', 'cases'));
   if (cases.length === 0) throw new Error('No eval cases found under evals/cases');
 
+  const reportDir = join(process.cwd(), 'evals', 'reports');
+  await mkdir(reportDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const reportPath = join(reportDir, `${prompt.version}-${stamp}.json`);
+
   const results: CaseResult[] = [];
+
+  // Every case costs real money, so the report is rewritten after each one. A
+  // crash on case 19 must not discard eighteen cases of paid results.
+  const flush = async () =>
+    writeFile(
+      reportPath,
+      JSON.stringify(
+        { promptVersion: prompt.version, report: scoreRun(results), results },
+        null,
+        2,
+      ),
+    );
 
   for (const c of cases) {
     let costUsd = 0;
     let latencyMs = 0;
     let cachedInputTokens = 0;
+    const warnings: string[] = [];
 
     const outcome = await grade(
       { ...c },
@@ -35,6 +53,8 @@ async function main() {
             costUsd = e.costUsd;
             latencyMs = e.latencyMs;
             cachedInputTokens = e.usage.cachedInputTokens;
+            if (e.cacheWarning) warnings.push(e.cacheWarning);
+            warnings.push(...e.costWarnings);
           },
         },
         firstPass: { claim: async () => false },
@@ -54,6 +74,7 @@ async function main() {
       latencyMs,
       cachedInputTokens,
     });
+    await flush();
 
     const label =
       outcome.status === 'graded'
@@ -61,18 +82,23 @@ async function main() {
           ? 'ok'
           : 'MISMATCH'
         : outcome.status.toUpperCase();
-    console.log(`${label.padEnd(10)} ${c.caseId}`);
+    const detail = outcome.status === 'system_error' ? ` — ${outcome.reason}` : '';
+    console.log(`${label.padEnd(20)} ${c.caseId}${detail}`);
+    for (const w of warnings) console.log(`${' '.repeat(20)} warning: ${w}`);
   }
 
   const report = scoreRun(results);
   console.table(report);
+  console.log(`\nreport: ${reportPath}`);
 
-  await mkdir(join(process.cwd(), 'evals', 'reports'), { recursive: true });
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  await writeFile(
-    join(process.cwd(), 'evals', 'reports', `${prompt.version}-${stamp}.json`),
-    JSON.stringify({ promptVersion: prompt.version, report, results }, null, 2),
-  );
+  if (!report.trustworthy) {
+    console.error(
+      `\nUNTRUSTWORTHY RUN: ${report.errored} of ${report.cases} cases errored.\n` +
+        `Accuracy above is computed only over the cases that were graded, so it is not a baseline.\n` +
+        `Fix the errored cases and re-run before recording any number.`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 main().catch((err) => {

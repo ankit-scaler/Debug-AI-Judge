@@ -48,14 +48,19 @@ test('rejects a single oversized file before any model call', () => {
   expect(r.ok === false && r.errors.join()).toMatch(/too large/i);
 });
 
-test('rejects an oversized submission in aggregate', () => {
-  const big = 'x'.repeat(MAX_FILE_BYTES - 1);
-  const files = Array.from({ length: Math.ceil(MAX_TOTAL_BYTES / big.length) + 1 }, () => ({
-    path: 'src/App.jsx',
-    content: big,
+test('rejects an oversized submission in aggregate, naming the aggregate limit', () => {
+  // Distinct paths, so the rejection can only come from the aggregate check.
+  const editable: QuestionFile[] = Array.from({ length: 6 }, (_, i) => ({
+    path: `src/F${i}.jsx`,
+    content: '',
+    visibility: 'editable' as const,
   }));
-  const r = validateSubmission(files, questionFiles);
+  const chunk = 'x'.repeat(MAX_FILE_BYTES - 1);
+  const files = editable.map((f) => ({ path: f.path, content: chunk }));
+  expect(files.length * chunk.length).toBeGreaterThan(MAX_TOTAL_BYTES);
+  const r = validateSubmission(files, editable);
   expect(r.ok).toBe(false);
+  expect(r.ok === false && r.errors.join()).toMatch(/Submission is too large/i);
 });
 
 test('rejects content that is not valid UTF-8 text', () => {
@@ -65,4 +70,18 @@ test('rejects content that is not valid UTF-8 text', () => {
   );
   expect(r.ok).toBe(false);
   expect(r.ok === false && r.errors.join()).toMatch(/binary|control/i);
+});
+
+// C4: two entries for one path let a learner show the grader the reference fix
+// next to their real code. Both get rendered into the prompt, labelled the same.
+test('rejects duplicate submitted paths', () => {
+  const r = validateSubmission(
+    [
+      { path: 'src/App.jsx', content: 'const items = data.cart.items; // the good fix' },
+      { path: 'src/App.jsx', content: 'const items = data.items; // the real buggy code' },
+    ],
+    questionFiles,
+  );
+  expect(r.ok).toBe(false);
+  expect(r.ok === false && r.errors.join()).toMatch(/more than once/i);
 });

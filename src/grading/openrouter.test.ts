@@ -42,13 +42,65 @@ test('sends the API key as a bearer token', async () => {
 
 test('extracts usage including cached tokens', async () => {
   const r = await callModel(req, { fetch: reply(ok) as any, apiKey: 'k' });
-  expect(r.usage).toEqual({ inputTokens: 3500, outputTokens: 500, cachedInputTokens: 2000 });
+  expect(r.usage).toEqual({
+    inputTokens: 3500,
+    outputTokens: 500,
+    cachedInputTokens: 2000,
+    cacheWriteInputTokens: 0,
+    reportedCostUsd: null,
+  });
 });
 
 test('defaults cached tokens to zero when absent', async () => {
   const body = { ...ok, usage: { prompt_tokens: 10, completion_tokens: 2 } };
   const r = await callModel(req, { fetch: reply(body) as any, apiKey: 'k' });
   expect(r.usage.cachedInputTokens).toBe(0);
+  expect(r.usage.cacheWriteInputTokens).toBe(0);
+});
+
+// Shape captured from a live OpenRouter response on 2026-10-27.
+test('extracts cache-write tokens and the provider reported cost', async () => {
+  const body = {
+    choices: [{ message: { content: '{"criteria":[],"passed":true}' } }],
+    usage: {
+      prompt_tokens: 5521,
+      completion_tokens: 4,
+      cost: 0,
+      is_byok: true,
+      prompt_tokens_details: { cached_tokens: 0, cache_write_tokens: 5511 },
+      cost_details: { upstream_inference_cost: 0.02075625 },
+    },
+  };
+  const r = await callModel(req, { fetch: reply(body) as any, apiKey: 'k' });
+  expect(r.usage.cacheWriteInputTokens).toBe(5511);
+  expect(r.usage.reportedCostUsd).toBeCloseTo(0.02075625, 8);
+});
+
+test('falls back to usage.cost when no upstream cost is reported', async () => {
+  const body = {
+    choices: [{ message: { content: '{}' } }],
+    usage: { prompt_tokens: 10, completion_tokens: 2, cost: 0.0042 },
+  };
+  const r = await callModel(req, { fetch: reply(body) as any, apiKey: 'k' });
+  expect(r.usage.reportedCostUsd).toBeCloseTo(0.0042, 8);
+});
+
+// C2: these two paths are billed 200 responses. The usage must survive the throw.
+test('attaches usage to a non-JSON content error so the call can still be ledgered', async () => {
+  const body = {
+    choices: [{ message: { content: 'Sure! Here is the verdict:' } }],
+    usage: { prompt_tokens: 3500, completion_tokens: 40 },
+  };
+  await expect(callModel(req, { fetch: reply(body) as any, apiKey: 'k' })).rejects.toMatchObject({
+    usage: { inputTokens: 3500, outputTokens: 40 },
+  });
+});
+
+test('attaches usage to a no-content error so the call can still be ledgered', async () => {
+  const body = { choices: [], usage: { prompt_tokens: 3500, completion_tokens: 0 } };
+  await expect(callModel(req, { fetch: reply(body) as any, apiKey: 'k' })).rejects.toMatchObject({
+    usage: { inputTokens: 3500 },
+  });
 });
 
 test('parses the JSON content into raw', async () => {

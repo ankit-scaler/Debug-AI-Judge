@@ -10,15 +10,33 @@ export interface BuildError {
 
 export type BuildResult = { ok: true } | { ok: false; errors: BuildError[] };
 
-const EXTENSIONS = ['', '.jsx', '.js', '.tsx', '.ts', '/index.jsx', '/index.js'];
+const EXTENSIONS = [
+  '',
+  '.jsx',
+  '.js',
+  '.tsx',
+  '.ts',
+  '/index.jsx',
+  '/index.js',
+  '/index.tsx',
+  '/index.ts',
+];
+
+const DATAURL_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2'];
+const TEXT_EXTENSIONS = ['.md', '.txt', '.html'];
 
 function loaderFor(path: string): esbuild.Loader {
   if (path.endsWith('.tsx')) return 'tsx';
   if (path.endsWith('.ts')) return 'ts';
-  if (path.endsWith('.jsx')) return 'jsx';
   if (path.endsWith('.json')) return 'json';
   if (path.endsWith('.css')) return 'css';
-  return 'jsx';
+  if (DATAURL_EXTENSIONS.some((e) => path.endsWith(e))) return 'dataurl';
+  if (TEXT_EXTENSIONS.some((e) => path.endsWith(e))) return 'text';
+  if (/\.(jsx|js|mjs|cjs)$/.test(path)) return 'jsx';
+  // Anything else contributes nothing rather than being parsed as code. Guessing
+  // 'jsx' made an SVG prologue or a Markdown heading look like a syntax error in a
+  // file the learner cannot even open.
+  return 'empty';
 }
 
 function resolveRelative(
@@ -43,6 +61,11 @@ function resolveRelative(
 function stripNamespace(file: string | undefined): string | undefined {
   if (file === undefined) return undefined;
   return file.startsWith('virtual:') ? file.slice('virtual:'.length) : file;
+}
+
+/** esbuild also embeds the namespaced path inside message text, not just location.file. */
+function stripNamespaceEverywhere(text: string): string {
+  return text.replaceAll('virtual:', '');
 }
 
 export async function buildCheck(
@@ -78,6 +101,10 @@ export async function buildCheck(
       entryPoints: [entry],
       bundle: true,
       write: false,
+      // Required even with write:false: without an output path esbuild refuses to
+      // emit a second output file, so any JS importing CSS is a hard error.
+      // Nothing is written to disk.
+      outdir: 'out',
       logLevel: 'silent',
       format: 'esm',
       jsx: 'automatic',
@@ -94,7 +121,7 @@ export async function buildCheck(
         file: stripNamespace(m.location?.file) ?? entry,
         line: m.location?.line ?? 0,
         column: m.location?.column ?? 0,
-        text: m.text,
+        text: stripNamespaceEverywhere(m.text),
       })),
     };
   }
