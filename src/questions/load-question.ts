@@ -18,6 +18,8 @@ export interface QuestionMeta {
   symptom: string;
   visibility: Record<string, Visibility>;
   rubric: RubricCriterion[];
+  /** Ordered least to most revealing. Never sent in the initial learner payload -- see toLearnerQuestion. */
+  hints: string[];
 }
 
 export interface LoadedQuestion {

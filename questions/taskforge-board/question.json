@@ -1,0 +1,55 @@
+{
+  "id": "taskforge-board-index-key",
+  "slug": "taskforge-board",
+  "version": 2,
+  "title": "Marking a task done checks the wrong row",
+  "company": "TaskForge",
+  "difficulty": "hard",
+  "tags": ["react", "keys", "list-rendering"],
+  "timeLimitSec": 2100,
+  "entry": "src/App.jsx",
+  "handlersPath": "mock/handlers.js",
+  "scenario": "You are on the TaskForge team, building a lightweight task board. Completed tasks sink to the bottom of each column, sorted by priority above that.",
+  "symptom": "Marking a task done sometimes makes a completely different task's checkbox appear checked instead — or in addition. The task you actually clicked is not the one that visually changes.",
+  "visibility": {
+    "src/features/board/TaskColumn.jsx": "editable",
+    "src/App.jsx": "editable",
+    "src/App.css": "editable",
+    "src/features/board/TaskBoard.jsx": "editable",
+    "src/features/board/TaskRow.jsx": "editable",
+    "src/features/board/useTasks.js": "editable",
+    "src/features/board/taskSort.js": "editable",
+    "src/components/ui/Checkbox.jsx": "editable",
+    "src/components/ui/Avatar.jsx": "editable",
+    "src/lib/apiClient.js": "editable",
+    "mock/handlers.js": "readonly",
+    "notes/author-notes.md": "hidden"
+  },
+  "hints": [
+    "Mark one task done, then look very carefully at which OTHER task's checkbox changed. Is it really that task's own completion state?",
+    "TaskColumn.jsx maps over the sorted task list using the array index as each row's key. What happens to a key when the list it belongs to gets re-sorted?",
+    "Give each row a key that identifies the actual task, not its position in the list — something that doesn't change when the list is reordered."
+  ],
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "TaskColumn renders each TaskRow with key={task.id} (a stable identity for that task), not the array index, since taskSort re-orders tasks whenever one is marked done."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "Marking a task done moves it to the bottom of its column without any other, untouched task's checkbox changing to appear done."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The fix does not special-case any specific task title or id, and does not work by making taskSort stop reordering done tasks to the bottom (sorting must still visibly move a completed task after it is marked done)."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "Tasks are still sorted correctly — incomplete tasks ordered by priority above completed ones — after the fix."
+    }
+  ]
+}

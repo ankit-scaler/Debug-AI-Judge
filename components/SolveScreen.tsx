@@ -66,6 +66,17 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
   const [previewLoaded, setPreviewLoaded] = useState(false);
   const [stage, setStage] = useState<SubmitStage>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
+  const [revealedHints, setRevealedHints] = useState<string[]>([]);
+  const [hintsLoading, setHintsLoading] = useState(false);
+  const [noMoreHints, setNoMoreHints] = useState(false);
+  const [solutionFiles, setSolutionFiles] = useState<{ path: string; content: string }[] | null>(
+    null,
+  );
+  const [solutionLoading, setSolutionLoading] = useState(false);
+  // Two clicks required: the first arms it and names the consequence, the
+  // second actually spends it. One accidental click must never zero a
+  // learner's score -- see D24.
+  const [giveUpArmed, setGiveUpArmed] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const previewRef = useRef<PreviewFrameHandle>(null);
 
@@ -157,6 +168,55 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     }
   }, [contents, files, question]);
 
+  const passed = result !== null && result.status === 'graded' && result.passed;
+
+  const showNextHint = useCallback(async () => {
+    setHintsLoading(true);
+    try {
+      const response = await fetch(
+        `/api/questions/${question.slug}/hints?index=${revealedHints.length}`,
+      );
+      if (!response.ok) {
+        setNoMoreHints(true);
+        return;
+      }
+      const data = (await response.json()) as { hint: string; hasMore: boolean };
+      setRevealedHints((prev) => [...prev, data.hint]);
+      if (!data.hasMore) setNoMoreHints(true);
+    } finally {
+      setHintsLoading(false);
+    }
+  }, [question.slug, revealedHints.length]);
+
+  const viewSolution = useCallback(async () => {
+    setSolutionLoading(true);
+    try {
+      const response = await fetch(`/api/questions/${question.slug}/solution`);
+      const data = (await response.json()) as { files: { path: string; content: string }[] };
+      setSolutionFiles(data.files);
+      setBottomTab('solution');
+    } finally {
+      setSolutionLoading(false);
+    }
+  }, [question.slug]);
+
+  const handleGiveUp = useCallback(async () => {
+    if (!giveUpArmed) {
+      setGiveUpArmed(true);
+      return;
+    }
+    setSolutionLoading(true);
+    try {
+      const response = await fetch(`/api/attempts/${question.slug}/give-up`, { method: 'POST' });
+      const data = (await response.json()) as { files: { path: string; content: string }[] };
+      setSolutionFiles(data.files);
+      setBottomTab('solution');
+    } finally {
+      setSolutionLoading(false);
+      setGiveUpArmed(false);
+    }
+  }, [giveUpArmed, question.slug]);
+
   const busy = stage !== null;
   const activeReadOnly = visibility[activePath] !== 'editable';
 
@@ -206,6 +266,53 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
               </span>
             ))}
           </div>
+
+          <p className={styles.sectionLabel}>Hints</p>
+          {revealedHints.map((hint, i) => (
+            <p key={i} className={styles.hintText}>
+              {i + 1}. {hint}
+            </p>
+          ))}
+          {noMoreHints ? (
+            <p className={styles.empty}>No more hints.</p>
+          ) : (
+            <button
+              className={`${styles.btn} ${styles.btnSmall}`}
+              onClick={() => void showNextHint()}
+              disabled={hintsLoading}
+            >
+              {hintsLoading ? <span className={styles.spinner} /> : null}
+              {revealedHints.length === 0 ? 'Show a hint' : 'Show next hint'}
+            </button>
+          )}
+
+          <p className={styles.sectionLabel}>Solution</p>
+          {solutionFiles ? (
+            <button
+              className={`${styles.btn} ${styles.btnSmall}`}
+              onClick={() => setBottomTab('solution')}
+            >
+              View solution
+            </button>
+          ) : passed ? (
+            <button
+              className={`${styles.btn} ${styles.btnSmall}`}
+              onClick={() => void viewSolution()}
+              disabled={solutionLoading}
+            >
+              {solutionLoading ? <span className={styles.spinner} /> : null}
+              View solution
+            </button>
+          ) : (
+            <button
+              className={`${styles.btn} ${styles.btnSmall} ${giveUpArmed ? styles.btnDanger : ''}`}
+              onClick={() => void handleGiveUp()}
+              disabled={solutionLoading}
+            >
+              {solutionLoading ? <span className={styles.spinner} /> : null}
+              {giveUpArmed ? 'Click again — this question will count as 0' : "I'm stuck — show solution"}
+            </button>
+          )}
         </aside>
 
         <main className={styles.right}>
@@ -316,6 +423,7 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
             consoleLines={consoleLines}
             network={network}
             result={result}
+            solutionFiles={solutionFiles}
           />
         </main>
       </div>

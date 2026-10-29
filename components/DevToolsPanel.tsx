@@ -5,7 +5,12 @@ import type { ConsoleLine, NetworkEntry } from './PreviewFrame';
 import { ResultCard, type SubmitResult } from './ResultCard';
 import styles from './solve.module.css';
 
-export type BottomTab = 'console' | 'network' | 'results';
+export type BottomTab = 'console' | 'network' | 'results' | 'solution';
+
+export interface SolutionFile {
+  path: string;
+  content: string;
+}
 
 export interface DevToolsPanelProps {
   tab: BottomTab;
@@ -13,6 +18,7 @@ export interface DevToolsPanelProps {
   consoleLines: ConsoleLine[];
   network: NetworkEntry[];
   result: SubmitResult | null;
+  solutionFiles: SolutionFile[] | null;
 }
 
 export function DevToolsPanel({
@@ -21,6 +27,7 @@ export function DevToolsPanel({
   consoleLines,
   network,
   result,
+  solutionFiles,
 }: DevToolsPanelProps) {
   const [openRow, setOpenRow] = useState<number | null>(null);
 
@@ -28,6 +35,7 @@ export function DevToolsPanel({
     { id: 'console', label: 'Console', count: consoleLines.length },
     { id: 'network', label: 'Network', count: network.length },
     { id: 'results', label: 'Results' },
+    { id: 'solution', label: 'Solution' },
   ];
 
   return (
@@ -96,6 +104,21 @@ export function DevToolsPanel({
           ))}
 
         {tab === 'results' && <ResultCard result={result} />}
+
+        {tab === 'solution' &&
+          (solutionFiles === null ? (
+            <p className={styles.empty}>
+              Pass the question, or use &ldquo;I&rsquo;m stuck&rdquo; in the left panel, to unlock
+              the reference solution.
+            </p>
+          ) : (
+            solutionFiles.map((f) => (
+              <div key={f.path}>
+                <p className={styles.editorPath}>{f.path}</p>
+                <pre className={`${styles.evidence} mono`}>{f.content}</pre>
+              </div>
+            ))
+          ))}
       </div>
     </section>
   );

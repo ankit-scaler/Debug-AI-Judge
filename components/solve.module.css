@@ -512,3 +512,26 @@
   margin-left: var(--space-2);
   color: var(--warning);
 }
+
+.hintText {
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text);
+}
+
+.btnSmall {
+  min-width: 0;
+  width: 100%;
+  margin-bottom: var(--space-2);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.btnDanger {
+  border-color: var(--danger);
+  color: var(--danger);
+}

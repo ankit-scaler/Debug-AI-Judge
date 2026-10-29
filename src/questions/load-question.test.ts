@@ -9,14 +9,20 @@ test('loads the question with every file, including hidden ones', async () => {
   expect(q.referenceFix.length).toBeGreaterThan(0);
 });
 
-test('files absent from the visibility map default to read-only, never editable', async () => {
+test('every src file is editable; the mock API and author notes keep their restricted visibility', async () => {
   const q = await loadQuestion('flipkart-cart');
   for (const f of q.questionFiles) {
     expect(['editable', 'readonly', 'hidden']).toContain(f.visibility);
   }
-  expect(q.questionFiles.find((f) => f.path === 'src/App.jsx')?.visibility).toBe('readonly');
+  // Full-repo editing: no editable-file hint about where the bug lives. The
+  // mock API and the author's notes stay restricted regardless -- see D24.
+  expect(q.questionFiles.find((f) => f.path === 'src/App.jsx')?.visibility).toBe('editable');
   expect(q.questionFiles.find((f) => f.path === 'src/CartContext.jsx')?.visibility).toBe(
     'editable',
+  );
+  expect(q.questionFiles.find((f) => f.path === 'mock/handlers.js')?.visibility).toBe('readonly');
+  expect(q.questionFiles.find((f) => f.path === 'notes/author-notes.md')?.visibility).toBe(
+    'hidden',
   );
 });
 
@@ -51,6 +57,13 @@ test('the learner payload leaks no rubric, no reference fix and no hidden file',
   for (const file of hidden) {
     expect(payload).not.toContain(file.path);
     expect(payload).not.toContain(file.content);
+  }
+
+  // No hints upfront. Hints are revealed one at a time through their own
+  // route (see app/api/questions/[slug]/hints), never bundled with the page.
+  expect(loaded.meta.hints.length).toBeGreaterThan(0);
+  for (const hint of loaded.meta.hints) {
+    expect(payload).not.toContain(hint);
   }
 });
 

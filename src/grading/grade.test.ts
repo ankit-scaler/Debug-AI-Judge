@@ -20,6 +20,7 @@ function deps(overrides: Record<string, unknown> = {}) {
       record: vi.fn(async () => {}),
     },
     firstPass: { claim: vi.fn(async () => true) },
+    gaveUp: { has: vi.fn(async () => false) },
     callModel: vi.fn(async () => ({
       raw: passing,
       usage: {
@@ -168,6 +169,31 @@ test('records no cache warning once the prefix is long enough', async () => {
 // Note: this asserts grade() consults firstPass.claim exactly once per pass and
 // propagates its answer. Atomicity itself belongs to the DB layer behind claim()
 // and is out of scope for this phase.
+// The whole point of the give-up flow: viewing the solution and pasting it
+// back must never be indistinguishable from actually solving it.
+test('a user who gave up never scores, even on a genuine passing verdict', async () => {
+  const d = deps({ gaveUp: { has: vi.fn(async () => true) } });
+  const r = await grade(input(valid), d);
+  expect(r).toMatchObject({ status: 'graded', scored: false, gaveUp: true });
+  expect(d.firstPass.claim).not.toHaveBeenCalled();
+});
+
+test('a cache-hit pass does not score for a user who gave up', async () => {
+  const d = deps({
+    cache: { get: vi.fn(async () => passing), put: vi.fn(async () => {}) },
+    gaveUp: { has: vi.fn(async () => true) },
+  });
+  const r = await grade(input(valid), d);
+  expect(r).toMatchObject({ status: 'graded', cacheHit: true, scored: false, gaveUp: true });
+  expect(d.firstPass.claim).not.toHaveBeenCalled();
+});
+
+test('a user who has not given up scores normally, with gaveUp false', async () => {
+  const d = deps();
+  const r = await grade(input(valid), d);
+  expect(r).toMatchObject({ status: 'graded', scored: true, gaveUp: false });
+});
+
 test('a pass claims the score through firstPass.claim, and a refused claim does not score', async () => {
   let claimed = false;
   const claim = vi.fn(async () => {

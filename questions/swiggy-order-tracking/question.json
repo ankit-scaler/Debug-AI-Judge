@@ -1,0 +1,55 @@
+{
+  "id": "swiggy-order-tracking-stale-timer",
+  "slug": "swiggy-order-tracking",
+  "version": 2,
+  "title": "Live order status freezes on the first order",
+  "company": "Swiggy",
+  "difficulty": "medium",
+  "tags": ["react", "useEffect", "stale-closure"],
+  "timeLimitSec": 2400,
+  "entry": "src/App.jsx",
+  "handlersPath": "mock/handlers.js",
+  "scenario": "You are on the Swiggy order-tracking team. A user with two active orders reported that switching between them on the tracking page shows the wrong status.",
+  "symptom": "Selecting a second order does not update its live status — the screen keeps showing the first order's status, ticking through its own stages forever, no matter which order tab is selected.",
+  "visibility": {
+    "src/features/orders/useOrderTimer.js": "editable",
+    "src/App.jsx": "editable",
+    "src/App.css": "editable",
+    "src/features/orders/OrderList.jsx": "editable",
+    "src/features/orders/OrderDetail.jsx": "editable",
+    "src/features/orders/orderStatus.js": "editable",
+    "src/features/restaurant/RestaurantHeader.jsx": "editable",
+    "src/components/ui/Badge.jsx": "editable",
+    "src/components/ui/ProgressTimeline.jsx": "editable",
+    "src/lib/apiClient.js": "editable",
+    "mock/handlers.js": "readonly",
+    "notes/author-notes.md": "hidden"
+  },
+  "hints": [
+    "Watch the Network panel after you switch to the second order — which order's status endpoint is still being polled?",
+    "useOrderTimer.js starts an interval inside a useEffect with an empty dependency array. What happens to the orderId that interval is using if orderId changes after the effect first runs?",
+    "The effect needs to both react to a new orderId and clean up the interval it started for the previous one, or the old interval keeps running forever."
+  ],
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "The order-status polling effect in useOrderTimer re-synchronizes when orderId changes and clears its previous interval before starting a new one, instead of running once with an empty dependency array."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "After selecting a different order, the status shown advances based on that order's own polling, not the previously selected order's."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The displayed status still comes from the response of GET /api/orders/{id}/status for the currently selected order. It is not a hardcoded status sequence, a value set without a request, or a local stub that ignores the mock API."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "The first selected order's status still progresses correctly through repeated polls for as long as it remains selected."
+    }
+  ]
+}

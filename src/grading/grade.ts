@@ -43,6 +43,13 @@ export interface GradeDeps {
     record(e: UsageRecord): Promise<void>;
   };
   firstPass: { claim(userId: string, questionId: string): Promise<boolean> };
+  /**
+   * Whether this user has ever viewed this question's reference solution
+   * before earning a legitimate pass on it (the "give up" flow). A learner
+   * who has is permanently ineligible to score on it -- otherwise they could
+   * view the solution, paste it back, and be graded as if they solved it.
+   */
+  gaveUp: { has(userId: string, questionId: string): Promise<boolean> };
   callModel: typeof defaultCallModel;
   promptText: string;
   promptVersion: string;
@@ -52,7 +59,15 @@ export interface GradeDeps {
 }
 
 export type GradeOutcome =
-  | { status: 'graded'; verdict: Verdict; cacheHit: boolean; costUsd: number; scored: boolean }
+  | {
+      status: 'graded';
+      verdict: Verdict;
+      cacheHit: boolean;
+      costUsd: number;
+      scored: boolean;
+      /** True when `scored` is false specifically because this user gave up on this question. */
+      gaveUp: boolean;
+    }
   | { status: 'invalid_submission'; errors: string[] }
   | { status: 'build_failed'; errors: BuildError[] }
   | { status: 'grading_unavailable'; reason: 'spend_ceiling' }
@@ -63,13 +78,15 @@ export async function grade(input: GradeInput, deps: GradeDeps): Promise<GradeOu
   if (!validation.ok) return { status: 'invalid_submission', errors: validation.errors };
 
   const hash = submissionHash(input.questionId, input.questionVersion, input.submitted);
+  const hasGivenUp = await deps.gaveUp.has(deps.userId, input.questionId);
 
   const cached = await deps.cache.get(hash);
   if (cached) {
-    const scored = cached.passed
-      ? await deps.firstPass.claim(deps.userId, input.questionId)
-      : false;
-    return { status: 'graded', verdict: cached, cacheHit: true, costUsd: 0, scored };
+    const scored =
+      cached.passed && !hasGivenUp
+        ? await deps.firstPass.claim(deps.userId, input.questionId)
+        : false;
+    return { status: 'graded', verdict: cached, cacheHit: true, costUsd: 0, scored, gaveUp: hasGivenUp };
   }
 
   const merged = mergeFiles(input.questionFiles, input.submitted);
@@ -137,11 +154,19 @@ export async function grade(input: GradeInput, deps: GradeDeps): Promise<GradeOu
   }
 
   await deps.cache.put(hash, parsed.verdict);
-  const scored = parsed.verdict.passed
-    ? await deps.firstPass.claim(deps.userId, input.questionId)
-    : false;
+  const scored =
+    parsed.verdict.passed && !hasGivenUp
+      ? await deps.firstPass.claim(deps.userId, input.questionId)
+      : false;
 
-  return { status: 'graded', verdict: parsed.verdict, cacheHit: false, costUsd: cost, scored };
+  return {
+    status: 'graded',
+    verdict: parsed.verdict,
+    cacheHit: false,
+    costUsd: cost,
+    scored,
+    gaveUp: hasGivenUp,
+  };
 }
 
 function mergeFiles(questionFiles: QuestionFile[], submitted: SubmittedFile[]): SubmittedFile[] {

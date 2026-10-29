@@ -10,6 +10,8 @@ type SubmitResponse =
       passed: boolean;
       cacheHit: boolean;
       scored: boolean;
+      /** True when `scored` is false specifically because this learner gave up on this question. */
+      gaveUp: boolean;
       criteria: { id: string; description: string; passed: boolean; evidence: string }[];
     }
   | { status: 'invalid_submission'; errors: string[] }
@@ -57,6 +59,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
       passed: outcome.verdict.passed,
       cacheHit: outcome.cacheHit,
       scored: outcome.scored,
+      gaveUp: outcome.gaveUp,
       // Criterion text is revealed only after a submission, never in the question
       // payload. Deliberate: the result card is useless without it.
       criteria: outcome.verdict.criteria.map((c) => ({

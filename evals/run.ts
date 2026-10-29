@@ -77,6 +77,7 @@ async function main() {
             },
           },
           firstPass: { claim: async () => false },
+          gaveUp: { has: async () => false },
           callModel,
           promptText: prompt.text,
           promptVersion: prompt.version,

@@ -10,7 +10,14 @@ export interface CriterionResult {
 }
 
 export type SubmitResult =
-  | { status: 'graded'; passed: boolean; cacheHit: boolean; scored: boolean; criteria: CriterionResult[] }
+  | {
+      status: 'graded';
+      passed: boolean;
+      cacheHit: boolean;
+      scored: boolean;
+      gaveUp: boolean;
+      criteria: CriterionResult[];
+    }
   | { status: 'invalid_submission'; errors: string[] }
   | { status: 'build_failed'; errors: { file: string; line: number; column: number; text: string }[] }
   | { status: 'grading_unavailable'; message: string }
@@ -69,6 +76,12 @@ export function ResultCard({ result }: { result: SubmitResult | null }) {
           : `Not solved yet — ${passedCount} of ${result.criteria.length} criteria passed`}
         {result.cacheHit ? <span className={styles.mocked}>cached verdict</span> : null}
       </div>
+
+      {result.gaveUp ? (
+        <p className={styles.empty}>
+          Not scored — you viewed this question&rsquo;s solution before solving it.
+        </p>
+      ) : null}
 
       {result.criteria.map((c) => (
         <div key={c.id} className={styles.criterion}>

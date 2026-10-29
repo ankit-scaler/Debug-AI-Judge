@@ -1,0 +1,56 @@
+{
+  "id": "zomato-restaurant-discovery-unhandled-error",
+  "slug": "zomato-restaurant-discovery",
+  "version": 2,
+  "title": "Picking a cuisine filter crashes the page",
+  "company": "Zomato",
+  "difficulty": "medium",
+  "tags": ["react", "error-handling", "api"],
+  "timeLimitSec": 2100,
+  "entry": "src/App.jsx",
+  "handlersPath": "mock/handlers.js",
+  "scenario": "You are on the Zomato restaurant discovery team. The restaurant service occasionally returns an error for specific cuisine filters, and the page needs to handle that gracefully.",
+  "symptom": "Selecting the Italian cuisine filter breaks the page — the restaurant grid disappears and the app stops responding, instead of showing a message that the restaurant list could not be loaded.",
+  "visibility": {
+    "src/features/discover/useRestaurants.js": "editable",
+    "src/features/discover/RestaurantGrid.jsx": "editable",
+    "src/App.jsx": "editable",
+    "src/App.css": "editable",
+    "src/features/discover/DiscoverPage.jsx": "editable",
+    "src/features/discover/FilterSidebar.jsx": "editable",
+    "src/features/discover/restaurantTypes.js": "editable",
+    "src/components/ui/RestaurantCard.jsx": "editable",
+    "src/components/ui/ErrorBanner.jsx": "editable",
+    "src/components/ui/Skeleton.jsx": "editable",
+    "src/lib/apiClient.js": "editable",
+    "mock/handlers.js": "readonly",
+    "notes/author-notes.md": "hidden"
+  },
+  "hints": [
+    "Select the Italian filter and watch the console/crash panel — what exactly is undefined when the crash happens?",
+    "useRestaurants.js calls res.json() and trusts the result is always a restaurant list. Is that true for every HTTP status code?",
+    "There's an ErrorBanner component already built and imported nowhere — useRestaurants needs to expose an error state, and RestaurantGrid needs to render it instead of mapping over restaurants unconditionally."
+  ],
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "useRestaurants checks the response status (e.g. response.ok, or a status outside 200–299) before treating the body as a successful restaurant list, instead of always reading body.restaurants."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "Selecting the Italian cuisine filter, for which GET /api/restaurants returns a 503, shows a visible error message to the user instead of a blank grid or a crash."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The error state is driven by the real response status or body from GET /api/restaurants, not by a hardcoded check for the Italian cuisine specifically (e.g. `if (cuisine === 'italian')`) that fakes the error message without inspecting the response."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "Selecting a cuisine filter the mock returns 200 for still shows that cuisine's restaurant list correctly."
+    }
+  ]
+}

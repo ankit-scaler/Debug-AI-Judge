@@ -1,7 +1,7 @@
 {
   "id": "flipkart-cart-field-mismatch",
   "slug": "flipkart-cart",
-  "version": 3,
+  "version": 4,
   "title": "Customers cannot add items to the cart",
   "company": "Flipkart",
   "difficulty": "medium",
@@ -18,13 +18,18 @@
   "visibility": {
     "src/CartContext.jsx": "editable",
     "src/Header.jsx": "editable",
-    "src/App.jsx": "readonly",
-    "src/App.css": "readonly",
-    "src/ProductList.jsx": "readonly",
-    "src/Cart.jsx": "readonly",
+    "src/App.jsx": "editable",
+    "src/App.css": "editable",
+    "src/ProductList.jsx": "editable",
+    "src/Cart.jsx": "editable",
     "mock/handlers.js": "readonly",
     "notes/author-notes.md": "hidden"
   },
+  "hints": [
+    "Open the Network panel after clicking Add to cart, and look closely at the shape of the response body for POST /api/cart.",
+    "CartContext.jsx reads the response with data.items. Does that key actually exist on what the server sent back?",
+    "The cart items the server returns live one level deeper than where the code is currently looking for them."
+  ],
   "rubric": [
     {
       "id": "c1",

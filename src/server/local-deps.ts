@@ -10,10 +10,24 @@ import type { Verdict } from '../types';
  * the dev server clears the verdict cache and the spend total, which is the right
  * behaviour for a local toy and the wrong behaviour for production.
  */
+export const LOCAL_USER_ID = 'local-dev';
+
 const verdictCache = new Map<string, Verdict>();
 const firstPassClaims = new Set<string>();
+const gaveUpClaims = new Set<string>();
 const usageLog: UsageRecord[] = [];
 let spentUsd = 0;
+
+/**
+ * Records that a user viewed this question's solution before earning a
+ * legitimate pass on it. Called by the give-up route, before it hands back
+ * the reference fix. Permanent for the life of this server process -- there
+ * is no "undo", matching the rest of this phase's state (D12: no login, no
+ * database; restarting the dev server is the only reset).
+ */
+export function recordGiveUp(userId: string, questionId: string): void {
+  gaveUpClaims.add(`${userId}::${questionId}`);
+}
 
 const DEFAULT_CEILING_USD = 5;
 
@@ -34,7 +48,7 @@ export function localSpend(): LocalSpend {
   return { spentUsd, ceilingUsd: ceilingUsd(), calls: usageLog.length };
 }
 
-export async function localGradeDeps(userId = 'local-dev'): Promise<GradeDeps> {
+export async function localGradeDeps(userId = LOCAL_USER_ID): Promise<GradeDeps> {
   const prompt = await loadPrompt('grader', process.env.GRADER_PROMPT_VERSION ?? 'v1');
 
   return {
@@ -67,6 +81,9 @@ export async function localGradeDeps(userId = 'local-dev'): Promise<GradeDeps> {
         firstPassClaims.add(key);
         return true;
       },
+    },
+    gaveUp: {
+      has: async (uid, questionId) => gaveUpClaims.has(`${uid}::${questionId}`),
     },
     callModel,
     promptText: prompt.text,

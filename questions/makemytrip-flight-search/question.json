@@ -1,0 +1,55 @@
+{
+  "id": "makemytrip-flight-search-race",
+  "slug": "makemytrip-flight-search",
+  "version": 2,
+  "title": "Flight results show the wrong route",
+  "company": "MakeMyTrip",
+  "difficulty": "hard",
+  "tags": ["react", "async", "race-condition"],
+  "timeLimitSec": 2400,
+  "entry": "src/App.jsx",
+  "handlersPath": "mock/handlers.js",
+  "scenario": "You are on the MakeMyTrip flight search team. A tester reported that search results sometimes do not match the route they last searched for.",
+  "symptom": "Searching Delhi → Mumbai and then quickly searching Bengaluru → Hyderabad, before the first search responds, ends with the page correctly showing a \"Bengaluru → Hyderabad\" heading, but the flight cards listed underneath are still Delhi → Mumbai's — the slower first search's response arrives later and overwrites the newer results.",
+  "visibility": {
+    "src/features/search/useFlightSearch.js": "editable",
+    "src/App.jsx": "editable",
+    "src/App.css": "editable",
+    "src/features/search/SearchForm.jsx": "editable",
+    "src/features/search/SearchResults.jsx": "editable",
+    "src/features/search/SearchPage.jsx": "editable",
+    "src/features/search/resultsFormatter.js": "editable",
+    "src/components/ui/Spinner.jsx": "editable",
+    "src/components/ui/FlightCard.jsx": "editable",
+    "src/lib/apiClient.js": "editable",
+    "mock/handlers.js": "readonly",
+    "notes/author-notes.md": "hidden"
+  },
+  "hints": [
+    "Try a slow route first (Delhi → Mumbai), then immediately search a fast one (Bengaluru → Hyderabad) before the first finishes. Watch what the results show once both responses have arrived.",
+    "search() in useFlightSearch.js calls setResults as soon as its own response arrives, with no way to tell whether a newer search has started since.",
+    "Give each call to search() a way to know if it's still the most recent one — for example a counter or ref that only the latest call's response is allowed to act on."
+  ],
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "search() tags or tracks each outgoing request (e.g. a request id or ref) so that, when a response arrives, it can tell whether that response belongs to the most recently started search before using it."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "Searching Delhi→Mumbai and then immediately searching Bengaluru→Hyderabad, before the first response arrives, ends with Bengaluru→Hyderabad's flights shown — even once the slower Delhi→Mumbai response arrives afterward."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The fix does not work by disabling, debouncing, or otherwise preventing a new search from starting until the previous one resolves. A second search can still be started immediately after the first, and it is still that second search's response that ends up displayed."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "A single search with no overlapping requests still updates the results and clears the loading state normally."
+    }
+  ]
+}
