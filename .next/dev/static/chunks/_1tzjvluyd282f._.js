@@ -573,6 +573,15 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "PreviewFrame.useEffect": ()=>{
             let cancelled = false;
+            // A new runToken remounts the iframe below (key={runToken}), so this is
+            // always a brand new document that has not announced itself yet. Reset
+            // synchronously, in the same render pass as the runToken change, so a
+            // stale "ready" from the PREVIOUS iframe generation can never cause code
+            // to be posted into a frame that has not loaded its listener yet --
+            // postMessage into a frame before it's listening drops the message
+            // silently, leaving the preview blank with no error.
+            setFrameReady(false);
+            pendingCode.current = null;
             async function build() {
                 onStatus({
                     building: true,
@@ -595,8 +604,11 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
                     building: false,
                     errors: []
                 });
-                if (frameReady) send(result.code);
-                else pendingCode.current = result.code;
+                // frameReady is read fresh via a ref-free closure concern: this reads
+                // the state captured at effect-run time, which is always false right
+                // after the reset above, so the result always queues and is sent by
+                // the frameReady effect once the new iframe actually announces itself.
+                pendingCode.current = result.code;
             }
             void build();
             return ({
@@ -609,8 +621,7 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
         // eslint-disable-next-line react-hooks/exhaustive-deps
         }
     }["PreviewFrame.useEffect"], [
-        runToken,
-        frameReady
+        runToken
     ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "PreviewFrame.useEffect": ()=>{
@@ -634,9 +645,9 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
             border: 0,
             background: '#fff'
         }
-    }, void 0, false, {
+    }, runToken, false, {
         fileName: "[project]/components/PreviewFrame.tsx",
-        lineNumber: 116,
+        lineNumber: 129,
         columnNumber: 5
     }, this);
 }

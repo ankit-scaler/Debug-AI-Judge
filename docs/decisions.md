@@ -253,3 +253,28 @@ went against the recommendation, that is noted explicitly.
   a tuple origin. Confirmed server-side: the CORS header is present on both
   paths, the old blob/import code is gone from the served HTML, the inline
   script injection is present. Needs a real browser to confirm the fix lands.
+
+### D18. The preview iframe is keyed by runToken
+- **Decision:** `components/PreviewFrame.tsx`'s `<iframe>` now has `key={runToken}`,
+  and `frameReady` resets to `false` synchronously at the top of the build
+  effect whenever `runToken` changes.
+- **Reason:** after D17's fix, the same `blob:null` error kept appearing with
+  fresh random IDs on every Run click. The iframe's `src` never changed between
+  runs — only a `postMessage` was sent into whatever document was already
+  loaded there. A tab that had the Preview open before D17 shipped kept running
+  that pre-fix document forever; no edit to `frame.html` on disk could reach it,
+  because nothing ever told the iframe to reload. Confirmed server-side that
+  the fixed file was being served correctly (curl, cache headers fine); the gap
+  was purely that the already-loaded document was never replaced.
+- **The `frameReady` reset matters independently:** without it, a stale `true`
+  left over from the previous iframe generation could let code be posted into
+  a brand-new iframe before its message listener has attached —
+  `postMessage` into a frame that isn't listening yet drops silently, which
+  would have produced a blank preview with no error at all, a worse failure
+  mode than the one being fixed.
+- **Consequence:** every click of Run now does a genuine fresh load of the
+  preview document, not just a new bundle. Slightly more work per run (a real
+  page load of `frame.html` plus its import-mapped vendor files, all served
+  locally and small); worth it for the guarantee that the preview can never
+  again run on a stale document.
+- **Still not verified in a live browser** — see D17's note on tool availability.

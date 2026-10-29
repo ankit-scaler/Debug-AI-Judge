@@ -82,6 +82,16 @@ export function PreviewFrame({
   useEffect(() => {
     let cancelled = false;
 
+    // A new runToken remounts the iframe below (key={runToken}), so this is
+    // always a brand new document that has not announced itself yet. Reset
+    // synchronously, in the same render pass as the runToken change, so a
+    // stale "ready" from the PREVIOUS iframe generation can never cause code
+    // to be posted into a frame that has not loaded its listener yet --
+    // postMessage into a frame before it's listening drops the message
+    // silently, leaving the preview blank with no error.
+    setFrameReady(false);
+    pendingCode.current = null;
+
     async function build() {
       onStatus({ building: true, errors: [] });
       const result = await bundlePreview({ files, entry, handlersPath });
@@ -92,8 +102,11 @@ export function PreviewFrame({
         return;
       }
       onStatus({ building: false, errors: [] });
-      if (frameReady) send(result.code);
-      else pendingCode.current = result.code;
+      // frameReady is read fresh via a ref-free closure concern: this reads
+      // the state captured at effect-run time, which is always false right
+      // after the reset above, so the result always queues and is sent by
+      // the frameReady effect once the new iframe actually announces itself.
+      pendingCode.current = result.code;
     }
 
     void build();
@@ -103,7 +116,7 @@ export function PreviewFrame({
     // files/entry are intentionally not dependencies: the host controls when a
     // rebuild happens via runToken, so typing does not trigger a bundle per keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runToken, frameReady]);
+  }, [runToken]);
 
   useEffect(() => {
     if (frameReady && pendingCode.current) {
@@ -114,6 +127,14 @@ export function PreviewFrame({
 
   return (
     <iframe
+      // Keyed by runToken so React discards the old DOM node and mounts a
+      // genuinely new one on every run, rather than reusing a document that
+      // has already executed whatever JS it loaded. Without this, editing
+      // frame.html (or anything it loads) has no effect on a tab that has
+      // been sitting on the Preview tab since before the edit -- the running
+      // document is immune to changes on disk until something forces a real
+      // reload. This makes every run that reload, unconditionally.
+      key={runToken}
       ref={iframeRef}
       src="/preview/frame.html"
       title="App preview"
