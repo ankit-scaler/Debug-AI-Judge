@@ -5,7 +5,20 @@ const nextConfig: NextConfig = {
   // only esbuild-wasm belongs in the browser, used directly from the preview
   // bundler (src/preview/bundler.ts). It initialises its own internal worker;
   // we do not hand-write one (see docs/decisions.md D13).
-  serverExternalPackages: ['esbuild'],
+  //
+  // esbuild-wasm also has to be listed here, for the opposite direction: it
+  // is a client-only dependency, but SolveScreen.tsx ('use client') is still
+  // server-rendered for its initial HTML, which pulls bundler.ts -- and so
+  // esbuild-wasm -- into the SSR module graph. esbuild-wasm's module has a
+  // Node child_process code path (for its CLI/native use) that Turbopack
+  // cannot statically bundle for the server (the binary path it spawns is
+  // only resolvable at runtime, not at build time). That code path is never
+  // actually reached during SSR -- bundlePreview() only runs inside a
+  // useEffect -- but the module still has to load without error for SSR to
+  // produce the page at all. Marking it external makes Next.js `require()`
+  // it directly at runtime instead of bundling it, which sidesteps the
+  // static-resolution failure entirely. See D25.
+  serverExternalPackages: ['esbuild', 'esbuild-wasm'],
 
   async headers() {
     return [
