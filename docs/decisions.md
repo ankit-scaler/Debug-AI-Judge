@@ -224,3 +224,32 @@ went against the recommendation, that is noted explicitly.
   needed a way to see what the browser actually held. Scoped to development
   only, not linked from anywhere a learner reaches. Flagged for removal if it
   is not wanted as standing infrastructure.
+
+### D17. Preview frame injects an inline module script, not blob + dynamic import
+- **Decision:** `public/preview/frame.html` runs the learner's bundled code via
+  an inline `<script type="module">` with `textContent` set to the code,
+  appended to the document. The previous approach — `URL.createObjectURL(blob)`
+  then `import(blobUrl)` — is removed.
+- **Reason:** the iframe is deliberately sandboxed with an opaque origin
+  (`sandbox="allow-scripts allow-modals"`, no `allow-same-origin`, so it cannot
+  reach the parent page). Reported error: `TypeError: Failed to fetch
+  dynamically imported module: blob:null/<uuid>` — the `null` confirms the blob
+  URL carries the document's opaque origin. Dynamic `import()` of a `blob:` URL
+  from an opaque-origin document is unreliable in Chromium. An inline module
+  script has no fetch step for its own top-level text, sidestepping it.
+- **Companion fix, same root cause:** an opaque origin is never same-origin
+  with a real host, so the iframe's *other* fetches — the import map resolving
+  `react`/`react-dom/client` to `/preview/vendor/*.js` — were also subject to
+  CORS and had no allow header. `next.config.ts` now sends
+  `Access-Control-Allow-Origin: *` on `/preview/:path*` (required) and
+  `/monaco/:path*` (precautionary — Monaco loads from the parent page, which
+  has a normal origin, so this one is not required by this specific bug, but
+  costs nothing on public, non-secret static files).
+- **Not verified in a live browser.** This session has no browser automation
+  tool (checked: no Chrome extension, no built-in browser pane, no
+  computer-use). The diagnosis rests on the error string's `blob:null` origin
+  marker, documented Chromium behaviour around opaque-origin module fetches,
+  and the HTML/Fetch spec rule that an opaque origin is never same-origin with
+  a tuple origin. Confirmed server-side: the CORS header is present on both
+  paths, the old blob/import code is gone from the served HTML, the inline
+  script injection is present. Needs a real browser to confirm the fix lands.

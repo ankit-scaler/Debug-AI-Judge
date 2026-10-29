@@ -94,7 +94,7 @@
           post('error', { text: text });
         });
 
-        var currentUrl = null;
+        var previousScript = null;
 
         window.addEventListener('message', function (event) {
           var data = event.data;
@@ -104,21 +104,26 @@
           crash.style.display = 'none';
           crash.textContent = '';
           document.getElementById('root').innerHTML = '';
-          if (currentUrl) URL.revokeObjectURL(currentUrl);
 
-          var blob = new Blob([data.code], { type: 'text/javascript' });
-          currentUrl = URL.createObjectURL(blob);
+          // Inline module script text, not a blob: URL passed to import().
+          // This document is a sandboxed iframe with an opaque origin (no
+          // allow-same-origin, deliberately -- it must not be able to reach the
+          // parent page). Dynamic import() of a blob: URL is unreliable from an
+          // opaque-origin document in Chromium; an inline <script type="module">
+          // has no such fetch step for its own top-level text, so it sidesteps
+          // the problem entirely. Its nested imports (react, react-dom/client)
+          // still resolve through the import map above and are fetched as real
+          // HTTP requests -- see next.config.ts for the CORS headers those need,
+          // since an opaque-origin document's fetches are treated as
+          // cross-origin even to same-host URLs.
+          if (previousScript) previousScript.remove();
+          var script = document.createElement('script');
+          script.type = 'module';
+          script.textContent = data.code;
+          document.body.appendChild(script);
+          previousScript = script;
 
-          import(currentUrl).then(
-            function () {
-              post('ran', {});
-            },
-            function (err) {
-              var text = (err && (err.stack || err.message)) || String(err);
-              showCrash(text);
-              post('error', { text: text });
-            },
-          );
+          post('ran', {});
         });
 
         post('frame-ready', {});
