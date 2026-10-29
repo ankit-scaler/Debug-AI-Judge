@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 64, "column": 0}, "map": {"version":3,"sources":["file:///Users/ankitmishra/Documents/Development/DebugTool/app/api/debug/log/route.ts"],"sourcesContent":["/**\n * Local-only debug sink. The browser-side bundler posts here when something\n * surprising happens, so evidence lands in the dev server's own log instead of\n * requiring someone to open DevTools and paste it back. Never used outside\n * local development -- there is no database, no auth, and it is not linked from\n * anywhere a learner would reach.\n */\nexport async function POST(request: Request) {\n  const body = await request.json().catch(() => ({}));\n  console.log('[browser]', JSON.stringify(body, null, 2));\n  return new Response(null, { status: 204 });\n}\n"],"names":["POST","request","body","json","catch","console","log","JSON","stringify","Response","status"],"mappings":"AAAA;;;;;;CAMC;;;;AACM,eAAeA,KAAKC,OAAgB;IACzC,MAAMC,OAAO,MAAMD,QAAQE,IAAI,GAAGC,KAAK,CAAC,IAAM,CAAC,CAAC,CAAC;IACjDC,QAAQC,GAAG,CAAC,aAAaC,KAAKC,SAAS,CAACN,MAAM,MAAM;IACpD,OAAO,IAAIO,SAAS,MAAM;QAAEC,QAAQ;IAAI;AAC1C"}}]
+}

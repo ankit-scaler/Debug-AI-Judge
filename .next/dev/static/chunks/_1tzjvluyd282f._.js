@@ -1616,12 +1616,48 @@ const MOUNT = '__debuglab_mount__.jsx';
     'react-dom/client',
     'react/jsx-runtime'
 ];
-let initialised = null;
-/** esbuild-wasm may only be initialised once per realm. */ function ensureInitialised() {
-    initialised ??= __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$esbuild$2d$wasm$2f$lib$2f$browser$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["initialize"]({
+/**
+ * esbuild-wasm may only be initialised once per browser realm. A plain
+ * module-level `let` is not enough: editing this file during development
+ * triggers Hot Module Replacement, which re-evaluates the module and resets a
+ * local variable back to null -- while the real esbuild-wasm instance, loaded
+ * from node_modules and never hot-reloaded, still remembers it already
+ * initialised. The guard then calls `initialize()` a second time for real,
+ * and esbuild-wasm's own idempotency check throws "Cannot call initialize
+ * more than once". Parking the promise on globalThis survives HMR; catching
+ * that exact message is the fallback for any other path that double-calls it.
+ */ const GLOBAL_KEY = '__debuglabEsbuildInit';
+function ensureInitialised() {
+    const g = globalThis;
+    g[GLOBAL_KEY] ??= __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$esbuild$2d$wasm$2f$lib$2f$browser$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["initialize"]({
         wasmURL: '/preview/esbuild.wasm'
+    }).catch((err)=>{
+        if (err instanceof Error && err.message.includes('more than once')) {
+            return; // esbuild-wasm itself confirms it is already usable.
+        }
+        delete g[GLOBAL_KEY]; // a real failure must be retryable, not cached.
+        throw err;
     });
-    return initialised;
+    return g[GLOBAL_KEY];
+}
+function reportToServer(event, payload) {
+    // Fire-and-forget. If this fails (e.g. the dev server isn't the local one),
+    // the preview must still work -- this is diagnostics, not a dependency.
+    try {
+        void fetch('/api/debug/log', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                event,
+                ...payload
+            }),
+            keepalive: true
+        }).catch(()=>{});
+    } catch  {
+    // ignore
+    }
 }
 async function bundlePreview(options) {
     await ensureInitialised();
@@ -1629,6 +1665,19 @@ async function bundlePreview(options) {
             f.path,
             f.content
         ]));
+    // Pairing check: the bundler is only ever as correct as its inputs, and a
+    // path/content mismatch here would surface as a baffling resolve error in an
+    // unrelated file. Reported to the server log so it is readable without
+    // DevTools -- see app/api/debug/log/route.ts.
+    reportToServer('bundling', {
+        entry: options.entry,
+        handlersPath: options.handlersPath,
+        files: options.files.map((f)=>({
+                path: f.path,
+                bytes: f.content.length,
+                startsWith: f.content.slice(0, 50)
+            }))
+    });
     // The interceptor must patch fetch before the app evaluates. Module bodies run
     // in import order, so importing it first in the entry is what guarantees that.
     const imports = [];
@@ -1659,10 +1708,24 @@ async function bundlePreview(options) {
                 };
                 const resolved = (0, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$bundling$2f$resolve$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["resolveRelative"])(args.importer, args.path, map);
                 if (!resolved) {
+                    // Say what was actually available. A bare "cannot resolve" forces
+                    // whoever hits this to guess at the file set, and the file set is the
+                    // one thing they cannot see.
+                    const available = [
+                        ...map.keys()
+                    ].filter((k)=>!k.startsWith('__debuglab')).sort();
+                    const importerContent = map.get(args.importer);
+                    reportToServer('unresolved-import', {
+                        specifier: args.path,
+                        importer: args.importer,
+                        importerLoaded: map.has(args.importer),
+                        importerStartsWith: importerContent?.slice(0, 80) ?? null,
+                        available
+                    });
                     return {
                         errors: [
                             {
-                                text: `Cannot resolve "${args.path}" from "${args.importer}"`
+                                text: `Cannot resolve "${args.path}" from "${args.importer}". ` + `Files in this question: ${available.join(', ')}`
                             }
                         ]
                     };

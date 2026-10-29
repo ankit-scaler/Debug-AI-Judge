@@ -196,3 +196,31 @@ went against the recommendation, that is noted explicitly.
   carries a critical advisory (affects <=3.4.16); npm's own advice was circular
   between the two monaco versions. 3.4.17 is the patched release.
 - **Result:** `npm audit` reports 0 vulnerabilities.
+
+### D16. esbuild-wasm init guard moved to globalThis, with a catch-and-ignore fallback
+- **Decision:** `src/preview/bundler.ts` parks the `esbuild.initialize()` promise
+  on `globalThis` instead of a module-level `let`, and treats a caught
+  `"more than once"` rejection as success rather than a failure.
+- **Reason:** reproduced live. Every edit to `bundler.ts` during development
+  triggers Turbopack HMR, which re-evaluates the module and resets a plain local
+  variable to `null`. The real `esbuild-wasm` instance (in `node_modules`, never
+  hot-reloaded) still remembers it already initialised, so the reset guard made a
+  second real call and the library's own idempotency check threw
+  `Cannot call "initialize" more than once` — caught live via Next's dev-server
+  terminal reporting of unhandled browser rejections, then reproduced directly
+  against the real library in a throwaway Node script (confirmed the exact
+  message, and confirmed the library stays fully usable after the error is
+  caught and ignored).
+- **Likely also explains** the earlier "Cannot resolve ./CartContext.jsx from
+  mock/handlers.js" report: a half-initialised bundler state from the same
+  mechanism, on a tab that had been open across many prior HMR cycles.
+- **Verified:** `src/preview/bundler.test.ts` simulates the HMR reset with
+  `vi.resetModules()` + re-import, asserting `initialize()` is called once
+  across two fresh module instances, that a caught stray rejection does not fail
+  the bundle, and that a genuine failure is not cached (so a retry can succeed).
+- **Judgment call, not asked about first:** added `app/api/debug/log/route.ts`,
+  a local-only POST sink the bundler now reports to on every bundle and on every
+  unresolved import, since this session has no browser automation tool and
+  needed a way to see what the browser actually held. Scoped to development
+  only, not linked from anywhere a learner reaches. Flagged for removal if it
+  is not wanted as standing infrastructure.
