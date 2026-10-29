@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { loadPrompt } from './prompt-loader.js';
+import { loadPrompt } from './prompt-loader';
 
 test('loads a prompt and reports its version', async () => {
   const p = await loadPrompt('authoring', 'v1');

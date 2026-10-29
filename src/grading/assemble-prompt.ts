@@ -1,4 +1,4 @@
-import type { RubricCriterion, SubmittedFile } from '../types.js';
+import type { RubricCriterion, SubmittedFile } from '../types';
 
 /** Sonnet 4.6 needs a 1,024-token prefix to cache; ~4 chars per token, plus margin. */
 export const MIN_STABLE_PREFIX_CHARS = 4800;

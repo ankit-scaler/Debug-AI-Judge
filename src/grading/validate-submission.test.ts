@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { validateSubmission, MAX_FILE_BYTES, MAX_TOTAL_BYTES } from './validate-submission.js';
-import type { QuestionFile } from '../types.js';
+import { validateSubmission, MAX_FILE_BYTES, MAX_TOTAL_BYTES } from './validate-submission';
+import type { QuestionFile } from '../types';
 
 const questionFiles: QuestionFile[] = [
   { path: 'src/App.jsx', content: 'export default function App() {}', visibility: 'editable' },

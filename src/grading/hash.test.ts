@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { submissionHash } from './hash.js';
+import { submissionHash } from './hash';
 
 const a = { path: 'src/A.jsx', content: 'const a = 1;\n' };
 const b = { path: 'src/B.jsx', content: 'const b = 2;\n' };

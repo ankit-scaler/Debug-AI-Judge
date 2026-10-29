@@ -1,5 +1,12 @@
 import * as esbuild from 'esbuild';
-import type { SubmittedFile } from '../types.js';
+import {
+  loaderFor,
+  resolveRelative,
+  stripNamespace,
+  stripNamespaceEverywhere,
+  VIRTUAL_NAMESPACE,
+} from '../bundling/resolve';
+import type { SubmittedFile } from '../types';
 
 export interface BuildError {
   file: string;
@@ -9,64 +16,6 @@ export interface BuildError {
 }
 
 export type BuildResult = { ok: true } | { ok: false; errors: BuildError[] };
-
-const EXTENSIONS = [
-  '',
-  '.jsx',
-  '.js',
-  '.tsx',
-  '.ts',
-  '/index.jsx',
-  '/index.js',
-  '/index.tsx',
-  '/index.ts',
-];
-
-const DATAURL_EXTENSIONS = ['.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.woff', '.woff2'];
-const TEXT_EXTENSIONS = ['.md', '.txt', '.html'];
-
-function loaderFor(path: string): esbuild.Loader {
-  if (path.endsWith('.tsx')) return 'tsx';
-  if (path.endsWith('.ts')) return 'ts';
-  if (path.endsWith('.json')) return 'json';
-  if (path.endsWith('.css')) return 'css';
-  if (DATAURL_EXTENSIONS.some((e) => path.endsWith(e))) return 'dataurl';
-  if (TEXT_EXTENSIONS.some((e) => path.endsWith(e))) return 'text';
-  if (/\.(jsx|js|mjs|cjs)$/.test(path)) return 'jsx';
-  // Anything else contributes nothing rather than being parsed as code. Guessing
-  // 'jsx' made an SVG prologue or a Markdown heading look like a syntax error in a
-  // file the learner cannot even open.
-  return 'empty';
-}
-
-function resolveRelative(
-  importer: string,
-  specifier: string,
-  files: Map<string, string>,
-): string | undefined {
-  const base = importer.split('/').slice(0, -1);
-  const parts = specifier.split('/');
-  for (const part of parts) {
-    if (part === '.' || part === '') continue;
-    if (part === '..') base.pop();
-    else base.push(part);
-  }
-  const joined = base.join('/');
-  for (const ext of EXTENSIONS) {
-    if (files.has(joined + ext)) return joined + ext;
-  }
-  return undefined;
-}
-
-function stripNamespace(file: string | undefined): string | undefined {
-  if (file === undefined) return undefined;
-  return file.startsWith('virtual:') ? file.slice('virtual:'.length) : file;
-}
-
-/** esbuild also embeds the namespaced path inside message text, not just location.file. */
-function stripNamespaceEverywhere(text: string): string {
-  return text.replaceAll('virtual:', '');
-}
 
 export async function buildCheck(
   files: SubmittedFile[],
@@ -81,15 +30,15 @@ export async function buildCheck(
     name: 'debuglab-virtual',
     setup(build) {
       build.onResolve({ filter: /.*/ }, (args) => {
-        if (args.kind === 'entry-point') return { path: args.path, namespace: 'virtual' };
+        if (args.kind === 'entry-point') return { path: args.path, namespace: VIRTUAL_NAMESPACE };
         if (!args.path.startsWith('.')) return { path: args.path, external: true };
         const resolved = resolveRelative(args.importer, args.path, map);
         if (!resolved) {
           return { errors: [{ text: `Cannot resolve "${args.path}" from "${args.importer}"` }] };
         }
-        return { path: resolved, namespace: 'virtual' };
+        return { path: resolved, namespace: VIRTUAL_NAMESPACE };
       });
-      build.onLoad({ filter: /.*/, namespace: 'virtual' }, (args) => ({
+      build.onLoad({ filter: /.*/, namespace: VIRTUAL_NAMESPACE }, (args) => ({
         contents: map.get(args.path) ?? '',
         loader: loaderFor(args.path),
       }));

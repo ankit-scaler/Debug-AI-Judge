@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { assembleGradingMessages, MIN_STABLE_PREFIX_CHARS } from './assemble-prompt.js';
-import type { RubricCriterion } from '../types.js';
+import { assembleGradingMessages, MIN_STABLE_PREFIX_CHARS } from './assemble-prompt';
+import type { RubricCriterion } from '../types';
 
 const rubric: RubricCriterion[] = [
   { id: 'c1', kind: 'root_cause', description: 'reads cart.items' },

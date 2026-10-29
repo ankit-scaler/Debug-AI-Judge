@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preview</title>
+    <!--
+      The learner's bundle is imported as a blob module. Blob modules resolve bare
+      specifiers against THIS document's import map, which is why the map lives
+      here. Paths must match what scripts/build-preview-vendor.mjs produces; that
+      script asserts they do.
+    -->
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "./vendor/react.js",
+          "react/jsx-runtime": "./vendor/jsx-runtime.js",
+          "react-dom/client": "./vendor/react-dom-client.js",
+          "react-dom": "./vendor/react-dom-client.js"
+        }
+      }
+    </script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: system-ui, sans-serif;
+        background: #fff;
+        color: #111;
+      }
+      #debuglab-crash {
+        display: none;
+        margin: 16px;
+        padding: 12px 14px;
+        border: 1px solid #ef4444;
+        border-radius: 6px;
+        background: #fef2f2;
+        color: #991b1b;
+        font-family: ui-monospace, monospace;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <pre id="debuglab-crash"></pre>
+    <script>
+      (function () {
+        function post(type, payload) {
+          try {
+            parent.postMessage({ source: 'debuglab-preview', type: type, payload: payload }, '*');
+          } catch (e) {
+            /* parent gone */
+          }
+        }
+
+        function format(value) {
+          if (typeof value === 'string') return value;
+          if (value instanceof Error) return value.stack || value.message;
+          try {
+            return JSON.stringify(value);
+          } catch (e) {
+            return String(value);
+          }
+        }
+
+        // Forward the preview's console to the host's Console panel. The original
+        // is still called so the real devtools keep working too.
+        ['log', 'info', 'warn', 'error', 'debug'].forEach(function (level) {
+          var original = console[level] ? console[level].bind(console) : function () {};
+          console[level] = function () {
+            var args = Array.prototype.slice.call(arguments);
+            original.apply(null, args);
+            post('console', { level: level, text: args.map(format).join(' ') });
+          };
+        });
+
+        var crash = document.getElementById('debuglab-crash');
+        function showCrash(text) {
+          crash.textContent = text;
+          crash.style.display = 'block';
+        }
+
+        window.addEventListener('error', function (event) {
+          var text = (event.error && event.error.stack) || event.message;
+          showCrash(text);
+          post('error', { text: text });
+        });
+        window.addEventListener('unhandledrejection', function (event) {
+          var text = format(event.reason);
+          showCrash(text);
+          post('error', { text: text });
+        });
+
+        var currentUrl = null;
+
+        window.addEventListener('message', function (event) {
+          var data = event.data;
+          if (!data || data.source !== 'debuglab-host') return;
+          if (data.type !== 'run') return;
+
+          crash.style.display = 'none';
+          crash.textContent = '';
+          document.getElementById('root').innerHTML = '';
+          if (currentUrl) URL.revokeObjectURL(currentUrl);
+
+          var blob = new Blob([data.code], { type: 'text/javascript' });
+          currentUrl = URL.createObjectURL(blob);
+
+          import(currentUrl).then(
+            function () {
+              post('ran', {});
+            },
+            function (err) {
+              var text = (err && (err.stack || err.message)) || String(err);
+              showCrash(text);
+              post('error', { text: text });
+            },
+          );
+        });
+
+        post('frame-ready', {});
+      })();
+    </script>
+  </body>
+</html>

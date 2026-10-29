@@ -1,4 +1,4 @@
-import type { Usage } from '../types.js';
+import type { Usage } from '../types';
 
 export const GRADER_MODEL = 'anthropic/claude-sonnet-4.6';
 export const FEEDBACK_MODEL = 'anthropic/claude-haiku-5.5';

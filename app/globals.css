@@ -1,0 +1,136 @@
+/* Design direction A (Dark IDE), per docs/design-tokens.md.
+   Dark is the default. No component hardcodes a color. */
+
+:root {
+  --bg: #0f1117;
+  --surface: #161922;
+  --surface-raised: #1e222d;
+  --border: #2a2f3c;
+  --border-strong: #3a4150;
+  --text: #e6e9ef;
+  --text-muted: #9aa3b2;
+  --text-faint: #6b7382;
+  --accent: #f97316;
+  --accent-fill: #f97316;
+  --accent-hover: #fb8a3c;
+  --accent-fg: #0f1117;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #60a5fa;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.2);
+  --shadow-md: 0 4px 12px rgb(0 0 0 / 0.28);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-full: 999px;
+
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+}
+
+/* Light mode: follows the system unless the viewer has chosen light explicitly. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --bg: #f7f8fa;
+    --surface: #ffffff;
+    --surface-raised: #ffffff;
+    --border: #e2e5ea;
+    --border-strong: #c9ced6;
+    --text: #171a21;
+    --text-muted: #5b6472;
+    --text-faint: #8a929f;
+    /* #F97316 is only 2.6:1 on #F7F8FA -- text and icons use #C2410C in light
+       mode, and the orange is kept for fills and borders only. */
+    --accent: #c2410c;
+    --accent-fill: #f97316;
+    --accent-hover: #9a3412;
+    --accent-fg: #ffffff;
+    --success: #15803d;
+    --danger: #b91c1c;
+    --warning: #b45309;
+    --info: #1d4ed8;
+    --shadow-sm: 0 1px 2px rgb(15 17 23 / 0.08);
+    --shadow-md: 0 4px 12px rgb(15 17 23 / 0.12);
+  }
+}
+
+:root[data-theme='light'] {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #e2e5ea;
+  --border-strong: #c9ced6;
+  --text: #171a21;
+  --text-muted: #5b6472;
+  --text-faint: #8a929f;
+  --accent: #c2410c;
+  --accent-fill: #f97316;
+  --accent-hover: #9a3412;
+  --accent-fg: #ffffff;
+  --success: #15803d;
+  --danger: #b91c1c;
+  --warning: #b45309;
+  --info: #1d4ed8;
+  --shadow-sm: 0 1px 2px rgb(15 17 23 / 0.08);
+  --shadow-md: 0 4px 12px rgb(15 17 23 / 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  -webkit-font-smoothing: antialiased;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-code), ui-monospace, monospace;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

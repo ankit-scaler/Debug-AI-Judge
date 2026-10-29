@@ -1,6 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import type { QuestionFile, RubricCriterion, SubmittedFile, Visibility } from '../src/types.js';
+import { join } from 'node:path';
+import { readDirFiles } from '../src/files/read-dir-files';
+import type { QuestionFile, RubricCriterion, SubmittedFile, Visibility } from '../src/types';
 
 export interface EvalCase {
   caseId: string;
@@ -14,19 +15,6 @@ export interface EvalCase {
   referenceFix: SubmittedFile[];
   submitted: SubmittedFile[];
   expected: { passed: boolean; criteria: Record<string, boolean> };
-}
-
-async function readDirFiles(dir: string): Promise<SubmittedFile[]> {
-  const entries = await readdir(dir, { recursive: true, withFileTypes: true });
-  const out: SubmittedFile[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const absolute = join(entry.parentPath, entry.name);
-    // Case paths are always posix-style inside a question, whatever the host OS.
-    const rel = relative(dir, absolute).split(sep).join('/');
-    out.push({ path: rel, content: await readFile(absolute, 'utf8') });
-  }
-  return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
 export async function loadCases(root: string): Promise<EvalCase[]> {

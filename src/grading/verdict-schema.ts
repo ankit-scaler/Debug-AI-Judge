@@ -1,4 +1,4 @@
-import type { CriterionVerdict, RubricCriterion, Verdict } from '../types.js';
+import type { CriterionVerdict, RubricCriterion, Verdict } from '../types';
 
 export type ParsedVerdict =
   | { ok: true; verdict: Verdict }

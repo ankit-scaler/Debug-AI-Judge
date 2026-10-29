@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { SubmittedFile } from '../types.js';
+import type { SubmittedFile } from '../types';
 
 function normalise(content: string): string {
   return content.replace(/\r\n/g, '\n').replace(/\n+$/, '') + '\n';

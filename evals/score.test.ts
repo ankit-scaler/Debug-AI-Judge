@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { scoreRun, type CaseResult } from './score.js';
+import { scoreRun, type CaseResult } from './score';
 
 /** One grading of one case. `criteria` maps criterion id to the verdict given. */
 function run(

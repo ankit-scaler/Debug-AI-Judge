@@ -1,11 +1,11 @@
-import { assembleGradingMessages } from './assemble-prompt.js';
-import { buildCheck, type BuildError } from './build-gate.js';
-import { GRADER_MODEL, priceUsage } from './cost.js';
-import { submissionHash } from './hash.js';
-import { callModel as defaultCallModel, ModelCallError } from './openrouter.js';
-import { validateSubmission } from './validate-submission.js';
-import { parseVerdict, verdictJsonSchema } from './verdict-schema.js';
-import type { QuestionFile, RubricCriterion, SubmittedFile, Usage, Verdict } from '../types.js';
+import { assembleGradingMessages } from './assemble-prompt';
+import { buildCheck, type BuildError } from './build-gate';
+import { GRADER_MODEL, priceUsage } from './cost';
+import { submissionHash } from './hash';
+import { callModel as defaultCallModel, ModelCallError } from './openrouter';
+import { validateSubmission } from './validate-submission';
+import { parseVerdict, verdictJsonSchema } from './verdict-schema';
+import type { QuestionFile, RubricCriterion, SubmittedFile, Usage, Verdict } from '../types';
 
 export interface UsageRecord {
   userId: string;

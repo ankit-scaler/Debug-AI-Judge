@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { costUsd, GRADER_MODEL, MODEL_PRICES, priceUsage } from './cost.js';
-import type { Usage } from '../types.js';
+import { costUsd, GRADER_MODEL, MODEL_PRICES, priceUsage } from './cost';
+import type { Usage } from '../types';
 
 function usage(over: Partial<Usage> = {}): Usage {
   return {

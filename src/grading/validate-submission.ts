@@ -1,4 +1,4 @@
-import type { QuestionFile, SubmittedFile } from '../types.js';
+import type { QuestionFile, SubmittedFile } from '../types';
 
 export const MAX_FILE_BYTES = 128 * 1024;
 export const MAX_TOTAL_BYTES = 512 * 1024;

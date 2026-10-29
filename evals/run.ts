@@ -1,10 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { grade } from '../src/grading/grade.js';
-import { loadPrompt } from '../src/grading/prompt-loader.js';
-import { callModel } from '../src/grading/openrouter.js';
-import { loadCases } from './load-cases.js';
-import { scoreRun, type CaseResult } from './score.js';
+import { grade } from '../src/grading/grade';
+import { loadPrompt } from '../src/grading/prompt-loader';
+import { callModel } from '../src/grading/openrouter';
+import { loadCases } from './load-cases';
+import { scoreRun, type CaseResult } from './score';
 
 const PROMPT_VERSION = process.env.GRADER_PROMPT_VERSION ?? 'v1';
 /**

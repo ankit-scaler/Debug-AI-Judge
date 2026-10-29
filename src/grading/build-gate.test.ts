@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { buildCheck } from './build-gate.js';
+import { buildCheck } from './build-gate';
 
 const good = [
   { path: 'src/App.jsx', content: `import { Cart } from './Cart.jsx';\nexport default function App() { return <Cart />; }\n` },

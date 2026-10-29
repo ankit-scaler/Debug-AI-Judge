@@ -1,5 +1,5 @@
 import { expect, test, vi } from 'vitest';
-import { callModel } from './openrouter.js';
+import { callModel } from './openrouter';
 
 function reply(body: unknown, status = 200) {
   // Typed with fetch's signature so the assertions below can read the init argument.

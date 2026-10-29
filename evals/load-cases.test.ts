@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { loadCases } from './load-cases.js';
+import { loadCases } from './load-cases';
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'evalcases-'));

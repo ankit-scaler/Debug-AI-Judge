@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { loadPrompt } from './prompt-loader.js';
+import { loadPrompt } from './prompt-loader';
 
 // The grader prompt carries the safety-critical instructions. They are asserted
 // here rather than in the assembler so that changing them means changing a

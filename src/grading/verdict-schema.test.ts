@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { parseVerdict, verdictJsonSchema } from './verdict-schema.js';
-import type { RubricCriterion } from '../types.js';
+import { parseVerdict, verdictJsonSchema } from './verdict-schema';
+import type { RubricCriterion } from '../types';
 
 const rubric: RubricCriterion[] = [
   { id: 'c1', kind: 'root_cause', description: 'reads cart.items' },

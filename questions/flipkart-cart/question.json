@@ -1,0 +1,49 @@
+{
+  "id": "flipkart-cart-field-mismatch",
+  "slug": "flipkart-cart",
+  "version": 2,
+  "title": "Customers cannot add items to the cart",
+  "company": "Flipkart",
+  "difficulty": "medium",
+  "tags": [
+    "react",
+    "async",
+    "api-contract"
+  ],
+  "timeLimitSec": 2100,
+  "entry": "src/App.jsx",
+  "handlersPath": "mock/handlers.js",
+  "scenario": "You have joined the Flipkart web team. A bug has been reported against the product listing page.",
+  "symptom": "Customers click Add to cart and nothing happens. The cart stays empty and no error appears.",
+  "visibility": {
+    "src/CartContext.jsx": "editable",
+    "src/Header.jsx": "editable",
+    "src/App.jsx": "readonly",
+    "src/ProductList.jsx": "readonly",
+    "src/Cart.jsx": "readonly",
+    "mock/handlers.js": "readonly",
+    "notes/author-notes.md": "hidden"
+  },
+  "rubric": [
+    {
+      "id": "c1",
+      "kind": "root_cause",
+      "description": "The cart list is populated from the cart.items array in the response body, not from a top-level items field."
+    },
+    {
+      "id": "c2",
+      "kind": "behaviour",
+      "description": "After clicking Add to cart, the added product appears in the cart list instead of the empty-cart message."
+    },
+    {
+      "id": "c3",
+      "kind": "anti_shortcut",
+      "description": "The cart contents are derived from the API response: no literal product data is written into the component, and the POST request to /api/cart still happens and its result is still used."
+    },
+    {
+      "id": "c4",
+      "kind": "no_regression",
+      "description": "The header cart-count badge is still derived from the same cart items state the cart list uses, and not from a separate count source. This criterion is about where the badge gets its number from only; whether those items are the right items is covered by the other criteria."
+    }
+  ]
+}

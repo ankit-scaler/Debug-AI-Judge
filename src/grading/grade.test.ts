@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
-import { grade } from './grade.js';
-import { ModelCallError } from './openrouter.js';
-import type { QuestionFile, RubricCriterion, SubmittedFile, Verdict } from '../types.js';
+import { grade } from './grade';
+import { ModelCallError } from './openrouter';
+import type { QuestionFile, RubricCriterion, SubmittedFile, Verdict } from '../types';
 
 const rubric: RubricCriterion[] = [
   { id: 'c1', kind: 'root_cause', description: 'reads cart.items' },

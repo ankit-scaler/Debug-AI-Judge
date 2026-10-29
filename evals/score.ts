@@ -1,4 +1,4 @@
-import type { Verdict } from '../src/types.js';
+import type { Verdict } from '../src/types';
 
 /** One grading of one case. The same case is graded `repeats` times per run. */
 export interface CaseResult {

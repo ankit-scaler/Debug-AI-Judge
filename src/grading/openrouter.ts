@@ -1,4 +1,4 @@
-import type { Usage } from '../types.js';
+import type { Usage } from '../types';
 
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 

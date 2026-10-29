@@ -146,3 +146,53 @@ went against the recommendation, that is noted explicitly.
   instead of a wrong cost centre. `costUsd` no longer throws on an impossible
   usage shape — it clamps and flags, because that code runs with a learner waiting.
 - **Cost of the measurement:** about $0.02, with the user's explicit approval.
+
+### D11. Preview runs on esbuild-wasm in the browser, not Sandpack
+- **Decision:** the live preview bundles the learner's files with `esbuild-wasm`
+  in the browser and runs the result as a blob module inside an iframe, with React
+  vendored locally and resolved through an import map. Sandpack is not used.
+- **Reason:** `esbuild-wasm@0.28.2` is the exact WASM twin of the `esbuild@0.28.2`
+  already running the server-side build gate, so one resolver
+  (`src/bundling/resolve.ts`) serves both and a submission cannot preview fine but
+  fail the gate. It also removes the PRD's own flagged risk — "public CodeSandbox
+  bundler rate limits at 5,000 learners" — and works offline after first load.
+- **Departs from the PRD**, which specified Sandpack. User's call, taken in
+  planning with the tradeoff stated.
+- **Costs:** ~150 lines of bundling glue we own; "hot reload" is re-bundle and
+  reload rather than true HMR; a 3.6 MB gzipped `esbuild.wasm` on first load,
+  cached thereafter. That download is worth watching against the PRD's low-end
+  laptop concern.
+- **Rejected:** Sandpack as specified; Sandpack now with esbuild as a fallback.
+
+### D12. Phase 2a is a vertical slice
+- **Decision:** one question, no login, no database, no timer/hints/score/
+  leaderboard. In-memory verdict cache, spend ledger and first-pass claims
+  (`src/server/local-deps.ts`).
+- **Reason:** the unproven piece was the browser runtime, not the UI. Proving it
+  before building anything on top keeps a failure cheap.
+- **Consequence:** `localhost` only. Phase 2b adds Supabase and the rest.
+
+### D13. esbuild-wasm is called directly, with no hand-written worker
+- **Decision:** no `bundler.worker.ts`. `esbuild.initialize()` spawns its own
+  internal worker, so compilation is already off the main thread.
+- **Reason:** the plan called for our own web worker, which would have meant
+  bundler-specific worker plumbing under Turbopack — the single largest risk in
+  the plan. esbuild-wasm makes it unnecessary.
+- **Cost if wrong:** none observed; plugins run on the main thread either way.
+
+### D14. Relative TypeScript imports carry no file extension
+- **Decision:** relative imports across `src/` and `evals/` are extensionless
+  (`'../types'`, not `'../types.js'`).
+- **Reason:** Turbopack does not resolve a `.js` specifier to a `.ts` file, so
+  every App Router import of the grading engine failed. tsx, vitest and tsc all
+  resolve extensionless fine.
+- **Cost if wrong:** running these modules under plain `node
+  --experimental-strip-types` would need the extensions back. We use tsx (D-note
+  in the Task 12 ruling), so this does not bite.
+
+### D15. dompurify pinned by npm override
+- **Decision:** `overrides: { dompurify: "3.4.17" }` in package.json.
+- **Reason:** monaco-editor 0.56.0 and 0.57.0 both resolve dompurify 3.4.8, which
+  carries a critical advisory (affects <=3.4.16); npm's own advice was circular
+  between the two monaco versions. 3.4.17 is the patched release.
+- **Result:** `npm audit` reports 0 vulnerabilities.
