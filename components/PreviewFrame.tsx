@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { bundlePreview, type PreviewBuildError, type PreviewFile } from '@/src/preview/bundler';
+import { ReadyGate } from '@/src/preview/ready-gate';
 
 export interface ConsoleLine {
   level: string;
@@ -39,8 +40,24 @@ export function PreviewFrame({
   onStatus,
 }: PreviewFrameProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [frameReady, setFrameReady] = useState(false);
-  const pendingCode = useRef<string | null>(null);
+
+  const send = useCallback((code: string) => {
+    const frame = iframeRef.current?.contentWindow;
+    if (!frame) return;
+    frame.postMessage({ source: 'debuglab-host', type: 'run', code }, '*');
+  }, []);
+
+  // One gate for the component's whole life. `send` always reads
+  // iframeRef.current at call time, so the gate does not need to be recreated
+  // per generation -- only reset() needs to run per generation. See
+  // src/preview/ready-gate.ts for why this is a plain class and not React
+  // state: a prior version of this coordination, built from useState plus two
+  // effects, had a real bug where a ref write (queuing the bundle) triggered
+  // no re-render, so nothing re-checked readiness once the bundle finished --
+  // silently dropping the "frame loaded before the bundle did" ordering,
+  // which is the common case, not the edge case.
+  const gateRef = useRef<ReadyGate | null>(null);
+  gateRef.current ??= new ReadyGate(send);
 
   // Messages from the preview realm: console output, network activity, crashes.
   useEffect(() => {
@@ -51,7 +68,7 @@ export function PreviewFrame({
       if (!data || data.source !== 'debuglab-preview') return;
 
       if (data.type === 'frame-ready') {
-        setFrameReady(true);
+        gateRef.current!.markReady();
         return;
       }
       if (data.type === 'console') {
@@ -71,26 +88,17 @@ export function PreviewFrame({
     return () => window.removeEventListener('message', onMessage);
   }, [onConsole, onNetwork]);
 
-  const send = useCallback((code: string) => {
-    const frame = iframeRef.current?.contentWindow;
-    if (!frame) return;
-    frame.postMessage({ source: 'debuglab-host', type: 'run', code }, '*');
-  }, []);
-
-  // Bundle on demand, then hand the result to the frame. If the frame has not
-  // announced itself yet, hold the code until it does.
+  // Bundle on demand and hand the result to the gate, which sends it the
+  // moment both the bundle and the (possibly not-yet-loaded) iframe are ready,
+  // regardless of which one finishes first.
   useEffect(() => {
     let cancelled = false;
 
-    // A new runToken remounts the iframe below (key={runToken}), so this is
-    // always a brand new document that has not announced itself yet. Reset
-    // synchronously, in the same render pass as the runToken change, so a
-    // stale "ready" from the PREVIOUS iframe generation can never cause code
-    // to be posted into a frame that has not loaded its listener yet --
-    // postMessage into a frame before it's listening drops the message
-    // silently, leaving the preview blank with no error.
-    setFrameReady(false);
-    pendingCode.current = null;
+    // A new runToken remounts the iframe below (key={runToken}): a brand new
+    // document that has not announced itself yet. Reset the gate so a ready
+    // signal left over from the PREVIOUS iframe generation can never cause
+    // code to be sent into a frame that has not loaded its listener yet.
+    gateRef.current!.reset();
 
     async function build() {
       onStatus({ building: true, errors: [] });
@@ -102,11 +110,7 @@ export function PreviewFrame({
         return;
       }
       onStatus({ building: false, errors: [] });
-      // frameReady is read fresh via a ref-free closure concern: this reads
-      // the state captured at effect-run time, which is always false right
-      // after the reset above, so the result always queues and is sent by
-      // the frameReady effect once the new iframe actually announces itself.
-      pendingCode.current = result.code;
+      gateRef.current!.setCode(result.code);
     }
 
     void build();
@@ -117,13 +121,6 @@ export function PreviewFrame({
     // rebuild happens via runToken, so typing does not trigger a bundle per keystroke.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runToken]);
-
-  useEffect(() => {
-    if (frameReady && pendingCode.current) {
-      send(pendingCode.current);
-      pendingCode.current = null;
-    }
-  }, [frameReady, send]);
 
   return (
     <iframe

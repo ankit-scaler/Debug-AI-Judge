@@ -278,3 +278,28 @@ went against the recommendation, that is noted explicitly.
   locally and small); worth it for the guarantee that the preview can never
   again run on a stale document.
 - **Still not verified in a live browser** — see D17's note on tool availability.
+
+### D19. Preview run coordination extracted into a tested, framework-free class
+- **Decision:** `src/preview/ready-gate.ts`'s `ReadyGate` replaces the
+  `useState` + two-`useEffect` coordination in `PreviewFrame.tsx` that decided
+  when to post the bundled code into the iframe.
+- **Reason:** D18's fix (reset readiness per iframe generation) was correct in
+  intent but removed `frameReady` from the build effect's dependency array —
+  which also removed the only thing that re-checked readiness once the bundle
+  finished. `pendingCode.current = result.code` is a ref write; it triggers no
+  re-render, so if the iframe became ready *before* the bundle finished (the
+  common case for a small app, not an edge case), nothing ever sent the code.
+  Result: a blank preview, zero console output, zero errors — confirmed by the
+  next screenshot, which matched this exactly rather than a module-loading
+  failure (which would have produced a console error).
+- **Why a class instead of fixing the effect again:** two React fixes in a row
+  each repaired one ordering and silently broke the other, because the
+  correctness condition — "send once, only once both signals for the same
+  generation have arrived, in whichever order" — has nothing to do with
+  render cycles, and expressing it through render-triggered effects kept
+  reintroducing exactly that dependency. `ReadyGate` is seven lines of state
+  machine with no React in it, fully covered by `ready-gate.test.ts`,
+  including the precise ordering that broke in production
+  (`markReady()` before `setCode()`) and the cross-generation case D18 was
+  for. `PreviewFrame` now only calls `reset()`, `markReady()`, `setCode()`.
+- **Still not verified in a live browser.**
