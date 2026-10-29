@@ -394,3 +394,121 @@
     border-bottom: 1px solid var(--border);
   }
 }
+
+/* ---- VS Code style file explorer ---- */
+
+.codeSplit {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.explorer {
+  width: 230px;
+  flex: 0 0 230px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-2) 0;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  user-select: none;
+}
+
+.explorerTitle {
+  margin: 0 0 var(--space-2);
+  padding: 0 var(--space-3);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.explorerHint {
+  margin: auto 0 0;
+  padding: var(--space-2) var(--space-3) 0;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--text-faint);
+}
+
+.treeList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.treeRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: 3px var(--space-3) 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 20px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.treeRow:hover {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.treeRowActive {
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: inset 2px 0 0 var(--accent-fill);
+}
+
+.chevron {
+  display: inline-block;
+  width: 12px;
+  flex: 0 0 12px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.folderName {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.fileName {
+  font-family: var(--font-code), ui-monospace, monospace;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editorPane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editorPath {
+  padding: var(--space-2) var(--space-3);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-code), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+
+.editorPathActive {
+  color: var(--text);
+}
+
+.readOnlyNote {
+  margin-left: var(--space-2);
+  color: var(--warning);
+}

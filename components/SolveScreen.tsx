@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { CodeEditor } from './CodeEditor';
 import { DevToolsPanel, type BottomTab } from './DevToolsPanel';
+import { FileTree } from './FileTree';
 import { PreviewFrame, type ConsoleLine, type NetworkEntry } from './PreviewFrame';
 import type { SubmitResult } from './ResultCard';
 import styles from './solve.module.css';
@@ -60,10 +61,14 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     [question.files, contents],
   );
 
-  const dirty = useMemo(
-    () => question.files.some((f) => contents[f.path] !== originals[f.path]),
+  const dirtyPaths = useMemo(
+    () =>
+      new Set(
+        question.files.filter((f) => contents[f.path] !== originals[f.path]).map((f) => f.path),
+      ),
     [question.files, contents, originals],
   );
+  const dirty = dirtyPaths.size > 0;
 
   const onConsole = useCallback((line: ConsoleLine) => {
     setConsoleLines((prev) => [...prev, line]);
@@ -207,44 +212,33 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
           </div>
 
           {rightTab === 'code' ? (
-            <>
-              <div className={styles.fileRow} role="tablist" aria-label="Files">
-                {question.files.map((f) => (
-                  <button
-                    key={f.path}
-                    role="tab"
-                    aria-selected={activePath === f.path}
-                    className={`${styles.fileTab} ${
-                      activePath === f.path ? styles.fileTabActive : ''
-                    } mono`}
-                    onClick={() => setActivePath(f.path)}
-                  >
-                    {f.path}
-                    {f.visibility !== 'editable' ? (
-                      <span className={styles.lock} title="Read-only">
-                        read-only
-                      </span>
-                    ) : null}
-                    {contents[f.path] !== originals[f.path] ? (
-                      <span className={styles.dirty} aria-label="Modified">
-                        ●
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
+            <div className={styles.codeSplit}>
+              <FileTree
+                files={question.files}
+                activePath={activePath}
+                dirtyPaths={dirtyPaths}
+                onSelect={setActivePath}
+              />
+              <div className={styles.editorPane}>
+                <div className={styles.editorPath}>
+                  <span className={styles.editorPathActive}>{activePath}</span>
+                  {activeReadOnly ? (
+                    <span className={styles.readOnlyNote}>read-only</span>
+                  ) : null}
+                </div>
+                <div className={styles.paneArea}>
+                  <CodeEditor
+                    path={activePath}
+                    value={contents[activePath] ?? ''}
+                    readOnly={activeReadOnly}
+                    theme={theme}
+                    onChange={(value) =>
+                      setContents((prev) => ({ ...prev, [activePath]: value }))
+                    }
+                  />
+                </div>
               </div>
-              <div className={styles.paneArea}>
-                <CodeEditor
-                  path={activePath}
-                  value={contents[activePath] ?? ''}
-                  readOnly={activeReadOnly}
-                  theme={theme}
-                  onChange={(value) =>
-                    setContents((prev) => ({ ...prev, [activePath]: value }))
-                  }
-                />
-              </div>
-            </>
+            </div>
           ) : (
             <div className={styles.paneArea}>
               <PreviewFrame

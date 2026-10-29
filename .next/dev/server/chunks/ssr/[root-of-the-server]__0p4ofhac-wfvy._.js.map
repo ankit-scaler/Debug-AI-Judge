@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 10, "column": 0}, "map": {"version":3,"sources":["file:///Users/ankitmishra/Documents/Development/DebugTool/app/page.tsx"],"sourcesContent":["import { redirect } from 'next/navigation';\n\n// Phase 2a ships one question. The question list arrives with phase 2b.\nexport default function Home() {\n  redirect('/q/flipkart-cart');\n}\n"],"names":["Home"],"mappings":";;;;AAAA;AAAA;;AAGe,SAASA;IACtB,IAAA,iMAAQ,EAAC;AACX"}}]
+}
