@@ -59,27 +59,10 @@ var mod = __turbopack_context__.x("path", () => require("path"));
 
 module.exports = mod;
 }),
-"[project]/app/api/debug/log/route.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
-"use strict";
+"[project]/app/api/debug/log/route.ts [app-route] (ecmascript)", ((__turbopack_context__, module, exports) => {
 
-/**
- * Local-only debug sink. The browser-side bundler posts here when something
- * surprising happens, so evidence lands in the dev server's own log instead of
- * requiring someone to open DevTools and paste it back. Never used outside
- * local development -- there is no database, no auth, and it is not linked from
- * anywhere a learner would reach.
- */ __turbopack_context__.s([
-    "POST",
-    ()=>POST
-]);
-async function POST(request) {
-    const body = await request.json().catch(()=>({}));
-    console.log('[browser]', JSON.stringify(body, null, 2));
-    return new Response(null, {
-        status: 204
-    });
-}
+var e = new Error("Could not parse module '[project]/app/api/debug/log/route.ts', file not found");
+e.code = 'MODULE_UNPARSABLE';
+throw e;
 }),
 ];
-
-//# sourceMappingURL=%5Broot-of-the-server%5D__1mth6-nmm0gca._.js.map

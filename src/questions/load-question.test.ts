@@ -62,6 +62,7 @@ test('the learner payload does carry what the solve screen needs', async () => {
   expect(learner.handlersPath).toBe('mock/handlers.js');
   expect(learner.files.map((f) => f.path)).toEqual([
     'mock/handlers.js',
+    'src/App.css',
     'src/App.jsx',
     'src/Cart.jsx',
     'src/CartContext.jsx',

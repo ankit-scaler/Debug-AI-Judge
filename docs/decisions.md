@@ -303,3 +303,82 @@ went against the recommendation, that is noted explicitly.
   (`markReady()` before `setCode()`) and the cross-generation case D18 was
   for. `PreviewFrame` now only calls `reset()`, `markReady()`, `setCode()`.
 - **Still not verified in a live browser.**
+
+### D20. The flipkart-cart question has real CSS
+- **Decision:** `questions/flipkart-cart/files/src/App.css`, imported from the
+  read-only `App.jsx`, styled against plain tags and the existing
+  `data-testid` attributes -- no className additions to any component, so the
+  bug-relevant files are untouched. Question version bumped 2 → 3.
+- **Reason:** the question had no CSS at all. It was generated from the eval
+  test fixture during phase 2a, built to prove the engine works, not as a
+  polished example. User asked directly why; this was the honest answer, and
+  they asked for it to be fixed.
+
+### D21. esbuild's CSS output is a separate file -- bundler.ts was discarding it
+- **Decision:** `bundlePreview` now extracts both the `.js` and `.css` entries
+  from `result.outputFiles` and returns `{ code, css }`; `frame.html` injects
+  `css` into a dedicated `<style id="debuglab-question-css">` element,
+  replaced (not appended) on every run.
+- **Reason:** found while verifying D20 live -- the styled question rendered
+  completely unstyled. Direct probe of esbuild confirmed `outputFiles.length
+  === 2` for a bundle with one CSS import (one `.js`, one `.css`); the
+  bundler's existing code (`result.outputFiles?.find(f => f.path.endsWith(
+  '.js'))`) only ever took the first, silently dropping the second. The build
+  gate's own comment ("Required even with write:false, so a stylesheet
+  import can emit") shows this was known about at the build-succeeds level
+  during the C1 fix, but never followed through to actually using the output.
+- **`ReadyGate` generalised to `ReadyGate<T>`** (was string-only) to carry
+  `{code, css}` as one coordinated payload; `setCode` renamed `setPayload`.
+  Its 8 existing tests needed only a method-name and type-param update, no
+  logic changes -- the coordination behaviour the class exists to guarantee
+  doesn't care what shape the payload is.
+- **Tested with the real, empirically-verified output shape**, not a
+  restated assumption: a genuinely real (unmocked) end-to-end test isn't
+  practical here, since `bundlePreview` hardcodes a browser-only
+  `wasmURL: '/preview/esbuild.wasm'` that cannot resolve under Node/Vitest.
+  The mock in `bundler.test.ts` reproduces the exact `outputFiles` shape
+  confirmed by direct probe before being encoded as a test.
+
+### D22. "Open in new tab" -- a real top-level browser tab for real DevTools
+- **Decision:** `PreviewFrame` exposes `openInNewTab()` via
+  `useImperativeHandle`; `SolveScreen` wires it to a button next to the
+  Preview tab. `window.open('/preview/frame.html', ...)` opens the identical
+  app as a genuine top-level page -- not sandboxed, a normal
+  `http://localhost:3000` origin -- so right-click Inspect, F12, Sources and
+  breakpoints all work exactly as on any other page. Kept in sync: every
+  later Run (or edit-triggered rebuild) also posts the new payload to it,
+  distinguished from the embedded iframe's messages via `event.source`.
+- **Reason:** user asked directly for a way to use real browser DevTools on
+  the preview, not just the app's own mini console/network panels. This was
+  already in the original phase-2a plan's UI description ("Preview tab: live
+  app + Open in new tab button") but never built.
+- **`frame.html`'s `post()` generalised** to target `window.opener` when
+  present (the popup case) and fall back to `parent` (the iframe case) --
+  the same file serves both, since which one applies depends only on how the
+  page was opened, not on anything in the file itself.
+- **Consequence that became D23**: the popup reference must survive the user
+  switching away from and back to the Preview tab.
+
+### D23. PreviewFrame stays mounted across tab switches, visibility only
+- **Decision:** `SolveScreen` no longer conditionally renders the Code pane
+  OR the Preview pane via a ternary. Both are always in the tree; only
+  `display: none` toggles which is visible.
+- **Reason:** found live, testing D22. Switching to the Code tab unmounted
+  `PreviewFrame` (it lived in the `false` branch of the ternary), which
+  destroyed `popupRef` -- a plain component-scoped ref. The already-open
+  popup tab kept running untouched, but the component's only reference to it
+  was gone: no further Run would ever reach it again, silently, with nothing
+  in the UI to say why. Switching back to Preview also remounted a brand new
+  `PreviewFrame` instance, which re-ran its build effect on mount regardless
+  of whether `runToken` had changed -- meaning every glance at the Code tab
+  and back was silently forcing a full rebuild-and-reload of the preview,
+  unnoticed until now because testing always clicked Run immediately before
+  checking Preview, which masked it.
+- **Verified live**, not just reasoned about: opened the popup, switched to
+  Code, edited and fixed the code, switched back, clicked Run, then checked
+  the popup via direct JS execution in it -- confirmed `Cart: 1`,
+  `"Running Shoe"` in the cart, after the exact sequence that previously left
+  it permanently stuck on the pre-fix app with cart count 0.
+- **Also fixes an unannounced inefficiency**: returning to Preview after
+  editing code no longer re-bundles and reloads unless Run is actually
+  clicked.

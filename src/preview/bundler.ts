@@ -21,7 +21,7 @@ export interface PreviewBuildError {
 }
 
 export type PreviewBundle =
-  | { ok: true; code: string }
+  | { ok: true; code: string; css: string }
   | { ok: false; errors: PreviewBuildError[] };
 
 const ENTRY = '__debuglab_entry__.js';
@@ -61,21 +61,6 @@ function ensureInitialised(): Promise<void> {
   return g[GLOBAL_KEY];
 }
 
-function reportToServer(event: string, payload: unknown): void {
-  // Fire-and-forget. If this fails (e.g. the dev server isn't the local one),
-  // the preview must still work -- this is diagnostics, not a dependency.
-  try {
-    void fetch('/api/debug/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event, ...(payload as object) }),
-      keepalive: true,
-    }).catch(() => {});
-  } catch {
-    // ignore
-  }
-}
-
 export interface BundleOptions {
   files: PreviewFile[];
   /** The question's entry component, e.g. "src/App.jsx". Must default-export it. */
@@ -89,23 +74,15 @@ export async function bundlePreview(options: BundleOptions): Promise<PreviewBund
 
   const map = new Map(options.files.map((f) => [f.path, f.content]));
 
-  // Pairing check: the bundler is only ever as correct as its inputs, and a
-  // path/content mismatch here would surface as a baffling resolve error in an
-  // unrelated file. Reported to the server log so it is readable without
-  // DevTools -- see app/api/debug/log/route.ts.
-  reportToServer('bundling', {
-    entry: options.entry,
-    handlersPath: options.handlersPath,
-    files: options.files.map((f) => ({
-      path: f.path,
-      bytes: f.content.length,
-      startsWith: f.content.slice(0, 50),
-    })),
-  });
-
-  // The interceptor must patch fetch before the app evaluates. Module bodies run
-  // in import order, so importing it first in the entry is what guarantees that.
-  const imports: string[] = [];
+  // 'react' must be the first module to evaluate, full stop. react-dom/client
+  // and react/jsx-runtime's vendor bundles read React off a shared global
+  // (window.__DEBUGLAB_REACT__) that only react.js's own module body sets --
+  // see scripts/preview-react-shim.cjs. Explicitly importing it first, ahead
+  // of even the interceptor, guarantees that global exists before anything
+  // that depends on it runs. Leaving this to import order alone is exactly
+  // what broke before: the mount file's first import was 'react-dom/client',
+  // which evaluated before anything had imported bare 'react' at all.
+  const imports: string[] = [`import 'react';`];
   if (options.handlersPath) {
     map.set(INTERCEPTOR, INTERCEPTOR_MODULE.replace('./__HANDLERS__', `./${options.handlersPath}`));
     imports.push(`import './${INTERCEPTOR}';`);
@@ -134,14 +111,6 @@ export async function bundlePreview(options: BundleOptions): Promise<PreviewBund
           // whoever hits this to guess at the file set, and the file set is the
           // one thing they cannot see.
           const available = [...map.keys()].filter((k) => !k.startsWith('__debuglab')).sort();
-          const importerContent = map.get(args.importer);
-          reportToServer('unresolved-import', {
-            specifier: args.path,
-            importer: args.importer,
-            importerLoaded: map.has(args.importer),
-            importerStartsWith: importerContent?.slice(0, 80) ?? null,
-            available,
-          });
           return {
             errors: [
               {
@@ -175,11 +144,18 @@ export async function bundlePreview(options: BundleOptions): Promise<PreviewBund
       define: { 'process.env.NODE_ENV': '"development"' },
       plugins: [virtual],
     });
+    // esbuild emits CSS as a SEPARATE output file, not inlined into the JS --
+    // confirmed by direct inspection (a build with one CSS import produces
+    // outputFiles.length === 2). Grabbing only the .js entry, as this used
+    // to, built and ran without error but silently dropped every stylesheet:
+    // the bundle was fine, the page was just never styled. css defaults to
+    // '' when a question imports none, which is the common case.
     const code = result.outputFiles?.find((f) => f.path.endsWith('.js'))?.text;
+    const css = result.outputFiles?.find((f) => f.path.endsWith('.css'))?.text ?? '';
     if (code === undefined) {
       return { ok: false, errors: [{ file: options.entry, line: 0, column: 0, text: 'Bundler produced no JavaScript output' }] };
     }
-    return { ok: true, code };
+    return { ok: true, code, css };
   } catch (err) {
     const messages = (err as esbuild.BuildFailure).errors ?? [];
     if (messages.length === 0) {

@@ -492,15 +492,33 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$preview$2f$ready$2d$g
 ;
 ;
 ;
-function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwork, onStatus }) {
+const PreviewFrame = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["forwardRef"])(function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwork, onStatus, onLoaded }, ref) {
     const iframeRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
-    const send = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((code)=>{
+    const popupRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
+    // The last payload actually built, kept outside the gate so a tab opened
+    // *after* the current build finished still has something to receive the
+    // moment it announces itself ready -- the gate's own copy is cleared by
+    // design once it has been sent to the iframe.
+    const lastPayloadRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
+    const send = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((payload)=>{
         const frame = iframeRef.current?.contentWindow;
         if (!frame) return;
         frame.postMessage({
             source: 'debuglab-host',
             type: 'run',
-            code
+            ...payload
+        }, '*');
+        onLoaded();
+    }, [
+        onLoaded
+    ]);
+    const sendToPopup = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((payload)=>{
+        const popup = popupRef.current;
+        if (!popup || popup.closed) return;
+        popup.postMessage({
+            source: 'debuglab-host',
+            type: 'run',
+            ...payload
         }, '*');
     }, []);
     // One gate for the component's whole life. `send` always reads
@@ -514,13 +532,33 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
     // which is the common case, not the edge case.
     const gateRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
     gateRef.current ??= new __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$preview$2f$ready$2d$gate$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["ReadyGate"](send);
-    // Messages from the preview realm: console output, network activity, crashes.
+    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useImperativeHandle"])(ref, ()=>({
+            openInNewTab () {
+                const popup = window.open('/preview/frame.html', 'debuglab-preview');
+                popupRef.current = popup;
+            // If a build already finished, the popup's own 'frame-ready' message
+            // (handled below) is what actually delivers it -- window.open()
+            // returns before the new document has attached its listener, so
+            // posting here would race and silently drop, the same failure mode
+            // ReadyGate exists to prevent for the iframe.
+            }
+        }), []);
+    // Messages from the preview realm: console output, network activity,
+    // crashes -- from either the embedded iframe or a popped-out tab.
+    // event.source tells the two apart, since both post the same message
+    // shape; everything except frame-ready is treated identically regardless
+    // of which one sent it, so the Console/Network panels stay a single
+    // source of truth even when a learner is also driving the popped-out tab.
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         function onMessage(event) {
             const data = event.data;
             if (!data || data.source !== 'debuglab-preview') return;
             if (data.type === 'frame-ready') {
-                gateRef.current.markReady();
+                if (event.source === popupRef.current) {
+                    if (lastPayloadRef.current !== null) sendToPopup(lastPayloadRef.current);
+                } else {
+                    gateRef.current.markReady();
+                }
                 return;
             }
             if (data.type === 'console') {
@@ -543,17 +581,18 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
         return ()=>window.removeEventListener('message', onMessage);
     }, [
         onConsole,
-        onNetwork
+        onNetwork,
+        sendToPopup
     ]);
     // Bundle on demand and hand the result to the gate, which sends it the
     // moment both the bundle and the (possibly not-yet-loaded) iframe are ready,
-    // regardless of which one finishes first.
+    // regardless of which one finishes first. Also mirrored to an open popup.
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         let cancelled = false;
         // A new runToken remounts the iframe below (key={runToken}): a brand new
         // document that has not announced itself yet. Reset the gate so a ready
         // signal left over from the PREVIOUS iframe generation can never cause
-        // code to be sent into a frame that has not loaded its listener yet.
+        // code to be posted into a frame that has not loaded its listener yet.
         gateRef.current.reset();
         async function build() {
             onStatus({
@@ -577,7 +616,13 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
                 building: false,
                 errors: []
             });
-            gateRef.current.setCode(result.code);
+            const payload = {
+                code: result.code,
+                css: result.css
+            };
+            lastPayloadRef.current = payload;
+            gateRef.current.setPayload(payload);
+            sendToPopup(payload);
         }
         void build();
         return ()=>{
@@ -602,10 +647,10 @@ function PreviewFrame({ files, entry, handlersPath, runToken, onConsole, onNetwo
         }
     }, runToken, false, {
         fileName: "[project]/components/PreviewFrame.tsx",
-        lineNumber: 126,
+        lineNumber: 195,
         columnNumber: 5
     }, this);
-}
+});
 }),
 "[project]/components/ResultCard.tsx [app-ssr] (ecmascript)", ((__turbopack_context__) => {
 "use strict";
@@ -853,9 +898,17 @@ function SolveScreen({ question }) {
     const [network, setNetwork] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])([]);
     const [building, setBuilding] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
     const [buildErrors, setBuildErrors] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])([]);
+    // False from the moment a run starts until code actually reaches a loaded,
+    // listening iframe. Distinct from `building`: the JS bundle usually compiles
+    // in under a second, but the iframe itself -- on a tab that has never run
+    // esbuild-wasm before -- can take far longer to finish its own one-time
+    // engine warm-up. Without tracking this separately, the preview sat blank
+    // with no loading indicator for however long that second phase took.
+    const [previewLoaded, setPreviewLoaded] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
     const [stage, setStage] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(null);
     const [result, setResult] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(null);
     const [theme, toggleTheme] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$useTheme$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useTheme"])();
+    const previewRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useRef"])(null);
     const files = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>question.files.map((f)=>({
                 path: f.path,
                 content: contents[f.path] ?? f.content
@@ -884,11 +937,14 @@ function SolveScreen({ question }) {
     const onStatus = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])((status)=>{
         setBuilding(status.building);
         setBuildErrors(status.errors);
+        if (status.errors.length > 0) setPreviewLoaded(true); // nothing more to wait for
     }, []);
+    const onPreviewLoaded = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>setPreviewLoaded(true), []);
     const run = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
         setConsoleLines([]);
         setNetwork([]);
         setRightTab('preview');
+        setPreviewLoaded(false);
         setRunToken((n)=>n + 1);
     }, []);
     const reset = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useCallback"])(()=>{
@@ -896,6 +952,7 @@ function SolveScreen({ question }) {
         setConsoleLines([]);
         setNetwork([]);
         setResult(null);
+        setPreviewLoaded(false);
         setRunToken((n)=>n + 1);
     }, [
         originals
@@ -965,20 +1022,20 @@ function SolveScreen({ question }) {
                                 children: "Lab"
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 150,
+                                lineNumber: 167,
                                 columnNumber: 20
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 149,
+                        lineNumber: 166,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                         className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].spacer
                     }, void 0, false, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 152,
+                        lineNumber: 169,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -990,14 +1047,14 @@ function SolveScreen({ question }) {
                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].spinner
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 154,
+                                lineNumber: 171,
                                 columnNumber: 23
                             }, this) : null,
                             building ? 'Building' : 'Run'
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 153,
+                        lineNumber: 170,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1007,7 +1064,7 @@ function SolveScreen({ question }) {
                         children: "Reset"
                     }, void 0, false, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 157,
+                        lineNumber: 174,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1019,14 +1076,14 @@ function SolveScreen({ question }) {
                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].spinner
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 165,
+                                lineNumber: 182,
                                 columnNumber: 19
                             }, this) : null,
                             stage === 'checking' ? 'Checking build' : stage === 'grading' ? 'Grading' : 'Submit'
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 160,
+                        lineNumber: 177,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1036,13 +1093,13 @@ function SolveScreen({ question }) {
                         children: theme === 'dark' ? 'Light' : 'Dark'
                     }, void 0, false, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 168,
+                        lineNumber: 185,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/SolveScreen.tsx",
-                lineNumber: 148,
+                lineNumber: 165,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1056,7 +1113,7 @@ function SolveScreen({ question }) {
                                 children: question.company
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 175,
+                                lineNumber: 192,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h1", {
@@ -1064,7 +1121,7 @@ function SolveScreen({ question }) {
                                 children: question.title
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 176,
+                                lineNumber: 193,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1072,7 +1129,7 @@ function SolveScreen({ question }) {
                                 children: "Scenario"
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 178,
+                                lineNumber: 195,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1080,7 +1137,7 @@ function SolveScreen({ question }) {
                                 children: question.scenario
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 179,
+                                lineNumber: 196,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1088,7 +1145,7 @@ function SolveScreen({ question }) {
                                 children: "Reported symptom"
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 181,
+                                lineNumber: 198,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1096,7 +1153,7 @@ function SolveScreen({ question }) {
                                 children: question.symptom
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 182,
+                                lineNumber: 199,
                                 columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1107,7 +1164,7 @@ function SolveScreen({ question }) {
                                         children: question.difficulty
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 185,
+                                        lineNumber: 202,
                                         columnNumber: 13
                                     }, this),
                                     question.tags.map((t)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1115,19 +1172,19 @@ function SolveScreen({ question }) {
                                             children: t
                                         }, t, false, {
                                             fileName: "[project]/components/SolveScreen.tsx",
-                                            lineNumber: 187,
+                                            lineNumber: 204,
                                             columnNumber: 15
                                         }, this))
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 184,
+                                lineNumber: 201,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 174,
+                        lineNumber: 191,
                         columnNumber: 9
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("main", {
@@ -1145,7 +1202,7 @@ function SolveScreen({ question }) {
                                         children: "Code"
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 196,
+                                        lineNumber: 213,
                                         columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1156,17 +1213,45 @@ function SolveScreen({ question }) {
                                         children: "Preview"
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 204,
+                                        lineNumber: 221,
                                         columnNumber: 13
-                                    }, this)
+                                    }, this),
+                                    rightTab === 'preview' ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
+                                        children: [
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].spacer
+                                            }, void 0, false, {
+                                                fileName: "[project]/components/SolveScreen.tsx",
+                                                lineNumber: 231,
+                                                columnNumber: 17
+                                            }, this),
+                                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                                className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].tab,
+                                                onClick: ()=>previewRef.current?.openInNewTab(),
+                                                title: "Open the preview in its own browser tab, with full DevTools",
+                                                children: "Open in new tab ↗"
+                                            }, void 0, false, {
+                                                fileName: "[project]/components/SolveScreen.tsx",
+                                                lineNumber: 232,
+                                                columnNumber: 17
+                                            }, this)
+                                        ]
+                                    }, void 0, true, {
+                                        fileName: "[project]/components/SolveScreen.tsx",
+                                        lineNumber: 230,
+                                        columnNumber: 15
+                                    }, this) : null
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 195,
+                                lineNumber: 212,
                                 columnNumber: 11
                             }, this),
-                            rightTab === 'code' ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].codeSplit,
+                                style: {
+                                    display: rightTab === 'code' ? undefined : 'none'
+                                },
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$FileTree$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["FileTree"], {
                                         files: question.files,
@@ -1175,8 +1260,8 @@ function SolveScreen({ question }) {
                                         onSelect: setActivePath
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 216,
-                                        columnNumber: 15
+                                        lineNumber: 256,
+                                        columnNumber: 13
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].editorPane,
@@ -1189,22 +1274,22 @@ function SolveScreen({ question }) {
                                                         children: activePath
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/SolveScreen.tsx",
-                                                        lineNumber: 224,
-                                                        columnNumber: 19
+                                                        lineNumber: 264,
+                                                        columnNumber: 17
                                                     }, this),
                                                     activeReadOnly ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                         className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].readOnlyNote,
                                                         children: "read-only"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/SolveScreen.tsx",
-                                                        lineNumber: 226,
-                                                        columnNumber: 21
+                                                        lineNumber: 265,
+                                                        columnNumber: 35
                                                     }, this) : null
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/SolveScreen.tsx",
-                                                lineNumber: 223,
-                                                columnNumber: 17
+                                                lineNumber: 263,
+                                                columnNumber: 15
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].paneArea,
@@ -1219,57 +1304,63 @@ function SolveScreen({ question }) {
                                                             }))
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/SolveScreen.tsx",
-                                                    lineNumber: 230,
-                                                    columnNumber: 19
+                                                    lineNumber: 268,
+                                                    columnNumber: 17
                                                 }, this)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/SolveScreen.tsx",
-                                                lineNumber: 229,
-                                                columnNumber: 17
+                                                lineNumber: 267,
+                                                columnNumber: 15
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 222,
-                                        columnNumber: 15
+                                        lineNumber: 262,
+                                        columnNumber: 13
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 215,
-                                columnNumber: 13
-                            }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                lineNumber: 255,
+                                columnNumber: 11
+                            }, this),
+                            /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].paneArea,
+                                style: {
+                                    display: rightTab === 'preview' ? undefined : 'none'
+                                },
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$PreviewFrame$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["PreviewFrame"], {
+                                        ref: previewRef,
                                         files: files,
                                         entry: question.entry,
                                         handlersPath: question.handlersPath,
                                         runToken: runToken,
                                         onConsole: onConsole,
                                         onNetwork: onNetwork,
-                                        onStatus: onStatus
+                                        onStatus: onStatus,
+                                        onLoaded: onPreviewLoaded
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 244,
-                                        columnNumber: 15
+                                        lineNumber: 283,
+                                        columnNumber: 13
                                     }, this),
-                                    building ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    building || !previewLoaded ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].overlay,
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                                 className: __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].spinner
                                             }, void 0, false, {
                                                 fileName: "[project]/components/SolveScreen.tsx",
-                                                lineNumber: 255,
-                                                columnNumber: 19
+                                                lineNumber: 296,
+                                                columnNumber: 17
                                             }, this),
-                                            " Bundling your app…"
+                                            building ? 'Bundling your app…' : 'Starting the preview — first load can take a little while…'
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 254,
-                                        columnNumber: 17
+                                        lineNumber: 295,
+                                        columnNumber: 15
                                     }, this) : null,
                                     buildErrors.length > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                         className: `${__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$solve$2e$module$2e$css__$5b$app$2d$ssr$5d$__$28$css__module$29$__["default"].buildErrors} mono`,
@@ -1285,19 +1376,19 @@ function SolveScreen({ question }) {
                                                 ]
                                             }, i, true, {
                                                 fileName: "[project]/components/SolveScreen.tsx",
-                                                lineNumber: 261,
-                                                columnNumber: 21
+                                                lineNumber: 305,
+                                                columnNumber: 19
                                             }, this))
                                     }, void 0, false, {
                                         fileName: "[project]/components/SolveScreen.tsx",
-                                        lineNumber: 259,
-                                        columnNumber: 17
+                                        lineNumber: 303,
+                                        columnNumber: 15
                                     }, this) : null
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 243,
-                                columnNumber: 13
+                                lineNumber: 279,
+                                columnNumber: 11
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$DevToolsPanel$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DevToolsPanel"], {
                                 tab: bottomTab,
@@ -1307,25 +1398,25 @@ function SolveScreen({ question }) {
                                 result: result
                             }, void 0, false, {
                                 fileName: "[project]/components/SolveScreen.tsx",
-                                lineNumber: 270,
+                                lineNumber: 313,
                                 columnNumber: 11
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/SolveScreen.tsx",
-                        lineNumber: 194,
+                        lineNumber: 211,
                         columnNumber: 9
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/SolveScreen.tsx",
-                lineNumber: 173,
+                lineNumber: 190,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/components/SolveScreen.tsx",
-        lineNumber: 147,
+        lineNumber: 164,
         columnNumber: 5
     }, this);
 }
@@ -1517,47 +1608,23 @@ function ensureInitialised() {
     });
     return g[GLOBAL_KEY];
 }
-function reportToServer(event, payload) {
-    // Fire-and-forget. If this fails (e.g. the dev server isn't the local one),
-    // the preview must still work -- this is diagnostics, not a dependency.
-    try {
-        void fetch('/api/debug/log', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                event,
-                ...payload
-            }),
-            keepalive: true
-        }).catch(()=>{});
-    } catch  {
-    // ignore
-    }
-}
 async function bundlePreview(options) {
     await ensureInitialised();
     const map = new Map(options.files.map((f)=>[
             f.path,
             f.content
         ]));
-    // Pairing check: the bundler is only ever as correct as its inputs, and a
-    // path/content mismatch here would surface as a baffling resolve error in an
-    // unrelated file. Reported to the server log so it is readable without
-    // DevTools -- see app/api/debug/log/route.ts.
-    reportToServer('bundling', {
-        entry: options.entry,
-        handlersPath: options.handlersPath,
-        files: options.files.map((f)=>({
-                path: f.path,
-                bytes: f.content.length,
-                startsWith: f.content.slice(0, 50)
-            }))
-    });
-    // The interceptor must patch fetch before the app evaluates. Module bodies run
-    // in import order, so importing it first in the entry is what guarantees that.
-    const imports = [];
+    // 'react' must be the first module to evaluate, full stop. react-dom/client
+    // and react/jsx-runtime's vendor bundles read React off a shared global
+    // (window.__DEBUGLAB_REACT__) that only react.js's own module body sets --
+    // see scripts/preview-react-shim.cjs. Explicitly importing it first, ahead
+    // of even the interceptor, guarantees that global exists before anything
+    // that depends on it runs. Leaving this to import order alone is exactly
+    // what broke before: the mount file's first import was 'react-dom/client',
+    // which evaluated before anything had imported bare 'react' at all.
+    const imports = [
+        `import 'react';`
+    ];
     if (options.handlersPath) {
         map.set(INTERCEPTOR, __TURBOPACK__imported__module__$5b$project$5d2f$src$2f$preview$2f$interceptor$2d$source$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["INTERCEPTOR_MODULE"].replace('./__HANDLERS__', `./${options.handlersPath}`));
         imports.push(`import './${INTERCEPTOR}';`);
@@ -1591,14 +1658,6 @@ async function bundlePreview(options) {
                     const available = [
                         ...map.keys()
                     ].filter((k)=>!k.startsWith('__debuglab')).sort();
-                    const importerContent = map.get(args.importer);
-                    reportToServer('unresolved-import', {
-                        specifier: args.path,
-                        importer: args.importer,
-                        importerLoaded: map.has(args.importer),
-                        importerStartsWith: importerContent?.slice(0, 80) ?? null,
-                        available
-                    });
                     return {
                         errors: [
                             {
@@ -1641,7 +1700,14 @@ async function bundlePreview(options) {
                 virtual
             ]
         });
+        // esbuild emits CSS as a SEPARATE output file, not inlined into the JS --
+        // confirmed by direct inspection (a build with one CSS import produces
+        // outputFiles.length === 2). Grabbing only the .js entry, as this used
+        // to, built and ran without error but silently dropped every stylesheet:
+        // the bundle was fine, the page was just never styled. css defaults to
+        // '' when a question imports none, which is the common case.
         const code = result.outputFiles?.find((f)=>f.path.endsWith('.js'))?.text;
+        const css = result.outputFiles?.find((f)=>f.path.endsWith('.css'))?.text ?? '';
         if (code === undefined) {
             return {
                 ok: false,
@@ -1657,7 +1723,8 @@ async function bundlePreview(options) {
         }
         return {
             ok: true,
-            code
+            code,
+            css
         };
     } catch (err) {
         const messages = err.errors ?? [];
@@ -1798,8 +1865,14 @@ if (typeof XMLHttpRequest !== 'undefined') {
 /**
  * Coordinates two signals that can arrive in either order -- "the iframe has
  * loaded and is listening" and "the bundle is ready" -- and guarantees `send`
- * is called exactly once per generation, with the latest code, only once both
- * signals have arrived for that SAME generation.
+ * is called exactly once per generation, with the latest payload, only once
+ * both signals have arrived for that SAME generation.
+ *
+ * Generic in the payload type: originally string-only (just the bundled JS),
+ * widened to carry `{ code, css }` once CSS needed its own channel (see
+ * bundler.ts -- esbuild emits CSS as a second, separate output file, not
+ * inlined into the JS). The coordination logic has never cared what shape
+ * the payload is, only that it is delivered exactly once at the right time.
  *
  * Extracted after a real regression: the previous implementation tracked this
  * with React state (`frameReady`) plus a ref for the pending code, coordinated
@@ -1818,29 +1891,29 @@ if (typeof XMLHttpRequest !== 'undefined') {
 class ReadyGate {
     send;
     ready;
-    pendingCode;
+    pending;
     constructor(send){
         this.send = send;
         this.ready = false;
-        this.pendingCode = null;
+        this.pending = null;
     }
     /** Call at the start of a new generation (e.g. a new iframe just mounted). */ reset() {
         this.ready = false;
-        this.pendingCode = null;
+        this.pending = null;
     }
     /** Call when the current generation's iframe announces it is listening. */ markReady() {
         this.ready = true;
         this.trySend();
     }
-    /** Call when a new bundle is ready to run. */ setCode(code) {
-        this.pendingCode = code;
+    /** Call when a new bundle is ready to run. */ setPayload(payload) {
+        this.pending = payload;
         this.trySend();
     }
     trySend() {
-        if (!this.ready || this.pendingCode === null) return;
-        const code = this.pendingCode;
-        this.pendingCode = null;
-        this.send(code);
+        if (!this.ready || this.pending === null) return;
+        const payload = this.pending;
+        this.pending = null;
+        this.send(payload);
     }
 }
 }),

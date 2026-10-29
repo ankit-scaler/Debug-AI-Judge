@@ -1,0 +1,144 @@
+/*
+ * Read-only styling for this question. Deliberately targets plain tags and
+ * the existing data-testid attributes rather than adding classNames to the
+ * components -- the bug lives in CartContext.jsx and nothing here should
+ * need to change for a learner to find or fix it.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #f1f3f6;
+  color: #212121;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  background: #2874f0;
+  color: #fff;
+}
+
+header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+header span[data-testid='cart-count'] {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #fff;
+  color: #2874f0;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+header span[data-testid='cart-count']::before {
+  content: 'Cart: ';
+  font-weight: 400;
+  color: #212121;
+  margin-right: 2px;
+}
+
+main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  max-width: 900px;
+  margin: 24px auto;
+  padding: 0 16px;
+  align-items: flex-start;
+}
+
+/* Product list */
+main > ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 2 1 480px;
+}
+
+main > ul > li {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 180px;
+  padding: 16px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+main > ul > li button {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 2px;
+  background: #fb641b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+main > ul > li button:hover {
+  background: #e65a16;
+}
+
+/* Cart panel -- Cart.jsx renders either a <p> (empty) or a <ul data-testid="cart"> */
+main > p,
+main > ul[data-testid='cart'] {
+  flex: 1 1 220px;
+  margin: 0;
+  padding: 16px;
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  font-size: 14px;
+}
+
+main > p {
+  color: #878787;
+}
+
+main > ul[data-testid='cart'] {
+  list-style: none;
+}
+
+main > ul[data-testid='cart']::before {
+  content: 'Your cart';
+  display: block;
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: #212121;
+}
+
+main > ul[data-testid='cart'] li {
+  padding: 8px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+main > ul[data-testid='cart'] li:first-child {
+  border-top: 0;
+}

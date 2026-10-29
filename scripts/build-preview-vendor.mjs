@@ -1,13 +1,26 @@
 /**
  * Prepares everything the preview iframe needs, locally. No CDN.
  *
- * React 19 ships CJS entry points, so a browser module cannot import it directly.
- * We bundle it with the Node esbuild we already depend on, into three separate ESM
- * files -- one per bare specifier the learner's bundle will import. Three files
- * rather than one because `react` and `react/jsx-runtime` both export `Fragment`,
- * and a single re-export file would collide on it.
+ * React 19 ships CJS entry points, so a browser module cannot import it
+ * directly. We bundle it with the Node esbuild we already depend on, into
+ * three separate ESM files -- one per bare specifier the learner's bundle
+ * will import.
  *
- * Also copies esbuild.wasm out of node_modules so the preview worker can fetch it.
+ * Each vendor file is written as an explicit runtime destructure of the
+ * resolved CJS module's own properties, not `export * from '<pkg>'`. React's
+ * package entry points (react.js, react-dom/client.js, react/jsx-runtime.js)
+ * all do `module.exports = require(NODE_ENV === 'production' ? A : B)` --
+ * esbuild cannot statically see through that conditional require to know
+ * what names the real module exports, so `export *` silently produces only a
+ * `default` export and drops every named export (createContext, useState,
+ * createRoot, jsx, ...). Confirmed live: `export * from 'react'` built
+ * without error, but the browser then threw "The requested module 'react'
+ * does not provide an export named 'createContext'" the moment real code
+ * tried to use it. Destructuring off the resolved default at runtime doesn't
+ * depend on esbuild's static CJS analysis at all, so it can't hit this again
+ * regardless of how the upstream package structures its entry point.
+ *
+ * Also copies esbuild.wasm and the Monaco AMD build out of node_modules.
  */
 import { cp, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -18,33 +31,70 @@ const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const outDir = join(root, 'public', 'preview', 'vendor');
 
 const TARGETS = [
-  { file: 'react.js', specifier: 'react', externaliseReact: false },
-  { file: 'jsx-runtime.js', specifier: 'react/jsx-runtime', externaliseReact: true },
-  { file: 'react-dom-client.js', specifier: 'react-dom/client', externaliseReact: true },
+  {
+    file: 'react.js',
+    specifier: 'react',
+    sharesReact: false,
+    // Every named export on React 19's public API. Destructuring a name that
+    // does not exist on the resolved object just yields `undefined` for that
+    // binding -- not a build error -- so it is safe to list generously.
+    names: [
+      'Children', 'Component', 'Fragment', 'Profiler', 'PureComponent',
+      'StrictMode', 'Suspense', 'cloneElement', 'createContext',
+      'createElement', 'createRef', 'forwardRef', 'isValidElement', 'lazy',
+      'memo', 'startTransition', 'unstable_act', 'act', 'version',
+      'useCallback', 'useContext', 'useDebugValue', 'useDeferredValue',
+      'useEffect', 'useId', 'useImperativeHandle', 'useInsertionEffect',
+      'useLayoutEffect', 'useMemo', 'useReducer', 'useRef', 'useState',
+      'useSyncExternalStore', 'useTransition', 'use', 'useActionState',
+      'useOptimistic',
+    ],
+  },
+  {
+    file: 'jsx-runtime.js',
+    specifier: 'react/jsx-runtime',
+    sharesReact: true,
+    names: ['jsx', 'jsxs', 'Fragment'],
+  },
+  {
+    file: 'react-dom-client.js',
+    specifier: 'react-dom/client',
+    sharesReact: true,
+    names: ['createRoot', 'hydrateRoot'],
+  },
 ];
 
+const reactShimPath = join(root, 'scripts', 'preview-react-shim.cjs');
+
 /**
- * Externalises ONLY the exact specifier `react`, rewritten to a relative URL.
- *
- * `external: ['react']` cannot be used here: esbuild also matches subpaths with
- * it, so `react/jsx-runtime` was left external inside jsx-runtime.js -- which the
- * import map then resolves straight back to that same file. An infinite import
- * loop. Rewriting to './react.js' also means the vendor files do not depend on
- * the import map at all; only the learner's bundle does.
+ * Resolves ONLY the exact specifier `react` to the real shim file, inlined
+ * (not external). esbuild's `alias` option matches path-like prefixes, so
+ * `alias: { react: shimPath }` also rewrote `react/jsx-runtime` to
+ * `<shimPath>/jsx-runtime` and broke resolution -- the same subpath-matching
+ * trap as the external-based attempt before it. An explicit plugin matching
+ * `/^react$/` is the only way to get exact-specifier-only resolution.
  */
-const externaliseExactReact = {
-  name: 'externalise-exact-react',
+const shareReactViaGlobal = {
+  name: 'share-react-via-global',
   setup(build) {
-    build.onResolve({ filter: /^react$/ }, () => ({ path: './react.js', external: true }));
+    build.onResolve({ filter: /^react$/ }, () => ({ path: reactShimPath }));
   },
 };
 
 await mkdir(outDir, { recursive: true });
 
 for (const target of TARGETS) {
+  const destructure = target.names.map((n) => `  ${n}`).join(',\n');
   const result = await esbuild.build({
     stdin: {
-      contents: `export * from '${target.specifier}';\nexport { default } from '${target.specifier}';\n`,
+      contents:
+        `import __vendorDefault from '${target.specifier}';\n` +
+        `const __vendorResolved = __vendorDefault && __vendorDefault.default ? __vendorDefault.default : __vendorDefault;\n` +
+        `export default __vendorResolved;\n` +
+        `export const {\n${destructure}\n} = __vendorResolved;\n` +
+        (target.sharesReact
+          ? ''
+          : `if (typeof window !== 'undefined') { window.__DEBUGLAB_REACT__ = __vendorResolved; }\n`),
       resolveDir: root,
       loader: 'js',
       sourcefile: `vendor-${target.file}`,
@@ -53,9 +103,14 @@ for (const target of TARGETS) {
     format: 'esm',
     platform: 'browser',
     target: 'es2022',
-    plugins: target.externaliseReact ? [externaliseExactReact] : [],
-    // React picks its dev or prod build from this. Dev gives learners real error
-    // messages in the preview instead of minified codes.
+    // See scripts/preview-react-shim.cjs for why this is an alias to a real
+    // inlined file, not external:true -- react-dom/jsx-runtime's own CJS
+    // source calls require('react') internally, which esbuild cannot turn
+    // into a working ESM import for an externalized module; it falls back to
+    // a runtime require() shim that does not exist in a browser.
+    plugins: target.sharesReact ? [shareReactViaGlobal] : [],
+    // React picks its dev or prod build from this. Dev gives learners real
+    // error messages in the preview instead of minified codes.
     define: { 'process.env.NODE_ENV': '"development"' },
     outfile: join(outDir, target.file),
     logLevel: 'warning',
@@ -73,16 +128,11 @@ await copyFile(
 );
 console.log('copied esbuild.wasm -> public/preview/esbuild.wasm');
 
-// Monaco ships an AMD build that its own loader can fetch at runtime. Self-hosting
-// it keeps the editor working offline and avoids the CDN that @monaco-editor/react
-// would otherwise default to. Bundler-specific worker plumbing is not needed.
 await cp(join(root, 'node_modules', 'monaco-editor', 'min', 'vs'), join(root, 'public', 'monaco', 'vs'), {
   recursive: true,
 });
 console.log('copied monaco AMD build -> public/monaco/vs');
 
-// The preview frame's import map is hand-written; make sure it still points at
-// files that exist, so a rename here cannot silently break the preview.
 const frame = await readFile(join(root, 'public', 'preview', 'frame.html'), 'utf8');
 for (const target of TARGETS) {
   if (!frame.includes(`./vendor/${target.file}`)) {

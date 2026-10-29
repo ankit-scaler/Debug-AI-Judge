@@ -1,8 +1,14 @@
 /**
  * Coordinates two signals that can arrive in either order -- "the iframe has
  * loaded and is listening" and "the bundle is ready" -- and guarantees `send`
- * is called exactly once per generation, with the latest code, only once both
- * signals have arrived for that SAME generation.
+ * is called exactly once per generation, with the latest payload, only once
+ * both signals have arrived for that SAME generation.
+ *
+ * Generic in the payload type: originally string-only (just the bundled JS),
+ * widened to carry `{ code, css }` once CSS needed its own channel (see
+ * bundler.ts -- esbuild emits CSS as a second, separate output file, not
+ * inlined into the JS). The coordination logic has never cared what shape
+ * the payload is, only that it is delivered exactly once at the right time.
  *
  * Extracted after a real regression: the previous implementation tracked this
  * with React state (`frameReady`) plus a ref for the pending code, coordinated
@@ -15,16 +21,16 @@
  * usually does. A plain, synchronous, fully-tested class has no render cycle
  * to depend on, so this class of bug cannot recur here.
  */
-export class ReadyGate {
+export class ReadyGate<T> {
   private ready = false;
-  private pendingCode: string | null = null;
+  private pending: T | null = null;
 
-  constructor(private readonly send: (code: string) => void) {}
+  constructor(private readonly send: (payload: T) => void) {}
 
   /** Call at the start of a new generation (e.g. a new iframe just mounted). */
   reset(): void {
     this.ready = false;
-    this.pendingCode = null;
+    this.pending = null;
   }
 
   /** Call when the current generation's iframe announces it is listening. */
@@ -34,15 +40,15 @@ export class ReadyGate {
   }
 
   /** Call when a new bundle is ready to run. */
-  setCode(code: string): void {
-    this.pendingCode = code;
+  setPayload(payload: T): void {
+    this.pending = payload;
     this.trySend();
   }
 
   private trySend(): void {
-    if (!this.ready || this.pendingCode === null) return;
-    const code = this.pendingCode;
-    this.pendingCode = null;
-    this.send(code);
+    if (!this.ready || this.pending === null) return;
+    const payload = this.pending;
+    this.pending = null;
+    this.send(payload);
   }
 }

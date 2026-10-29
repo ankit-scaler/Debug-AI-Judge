@@ -1,10 +1,15 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { CodeEditor } from './CodeEditor';
 import { DevToolsPanel, type BottomTab } from './DevToolsPanel';
 import { FileTree } from './FileTree';
-import { PreviewFrame, type ConsoleLine, type NetworkEntry } from './PreviewFrame';
+import {
+  PreviewFrame,
+  type ConsoleLine,
+  type NetworkEntry,
+  type PreviewFrameHandle,
+} from './PreviewFrame';
 import type { SubmitResult } from './ResultCard';
 import styles from './solve.module.css';
 import { useTheme } from './useTheme';
@@ -52,9 +57,17 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
   const [network, setNetwork] = useState<NetworkEntry[]>([]);
   const [building, setBuilding] = useState(false);
   const [buildErrors, setBuildErrors] = useState<PreviewBuildError[]>([]);
+  // False from the moment a run starts until code actually reaches a loaded,
+  // listening iframe. Distinct from `building`: the JS bundle usually compiles
+  // in under a second, but the iframe itself -- on a tab that has never run
+  // esbuild-wasm before -- can take far longer to finish its own one-time
+  // engine warm-up. Without tracking this separately, the preview sat blank
+  // with no loading indicator for however long that second phase took.
+  const [previewLoaded, setPreviewLoaded] = useState(false);
   const [stage, setStage] = useState<SubmitStage>(null);
   const [result, setResult] = useState<SubmitResult | null>(null);
   const [theme, toggleTheme] = useTheme();
+  const previewRef = useRef<PreviewFrameHandle>(null);
 
   const files = useMemo(
     () => question.files.map((f) => ({ path: f.path, content: contents[f.path] ?? f.content })),
@@ -80,14 +93,17 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     (status: { building: boolean; errors: PreviewBuildError[] }) => {
       setBuilding(status.building);
       setBuildErrors(status.errors);
+      if (status.errors.length > 0) setPreviewLoaded(true); // nothing more to wait for
     },
     [],
   );
+  const onPreviewLoaded = useCallback(() => setPreviewLoaded(true), []);
 
   const run = useCallback(() => {
     setConsoleLines([]);
     setNetwork([]);
     setRightTab('preview');
+    setPreviewLoaded(false);
     setRunToken((n) => n + 1);
   }, []);
 
@@ -96,6 +112,7 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     setConsoleLines([]);
     setNetwork([]);
     setResult(null);
+    setPreviewLoaded(false);
     setRunToken((n) => n + 1);
   }, [originals]);
 
@@ -209,63 +226,89 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
             >
               Preview
             </button>
+            {rightTab === 'preview' ? (
+              <>
+                <span className={styles.spacer} />
+                <button
+                  className={styles.tab}
+                  onClick={() => previewRef.current?.openInNewTab()}
+                  title="Open the preview in its own browser tab, with full DevTools"
+                >
+                  Open in new tab ↗
+                </button>
+              </>
+            ) : null}
           </div>
 
-          {rightTab === 'code' ? (
-            <div className={styles.codeSplit}>
-              <FileTree
-                files={question.files}
-                activePath={activePath}
-                dirtyPaths={dirtyPaths}
-                onSelect={setActivePath}
-              />
-              <div className={styles.editorPane}>
-                <div className={styles.editorPath}>
-                  <span className={styles.editorPathActive}>{activePath}</span>
-                  {activeReadOnly ? (
-                    <span className={styles.readOnlyNote}>read-only</span>
-                  ) : null}
-                </div>
-                <div className={styles.paneArea}>
-                  <CodeEditor
-                    path={activePath}
-                    value={contents[activePath] ?? ''}
-                    readOnly={activeReadOnly}
-                    theme={theme}
-                    onChange={(value) =>
-                      setContents((prev) => ({ ...prev, [activePath]: value }))
-                    }
-                  />
-                </div>
+          {/*
+            Both sides are always mounted; only visibility toggles via CSS,
+            rather than one branch of a ternary deciding which side exists in
+            the tree. PreviewFrame specifically must survive a tab switch:
+            its popup-tab reference (set by "Open in new tab") lives in a ref
+            scoped to its own component instance. Unmounting it on every
+            switch to the Code tab silently severed that reference -- the
+            popped-out tab kept running, but no further Run would ever reach
+            it again, with no error anywhere to say why. Staying mounted also
+            means returning to Preview after editing code no longer forces a
+            full rebuild-and-reload just to look at it; only Run does that.
+          */}
+          <div className={styles.codeSplit} style={{ display: rightTab === 'code' ? undefined : 'none' }}>
+            <FileTree
+              files={question.files}
+              activePath={activePath}
+              dirtyPaths={dirtyPaths}
+              onSelect={setActivePath}
+            />
+            <div className={styles.editorPane}>
+              <div className={styles.editorPath}>
+                <span className={styles.editorPathActive}>{activePath}</span>
+                {activeReadOnly ? <span className={styles.readOnlyNote}>read-only</span> : null}
+              </div>
+              <div className={styles.paneArea}>
+                <CodeEditor
+                  path={activePath}
+                  value={contents[activePath] ?? ''}
+                  readOnly={activeReadOnly}
+                  theme={theme}
+                  onChange={(value) => setContents((prev) => ({ ...prev, [activePath]: value }))}
+                />
               </div>
             </div>
-          ) : (
-            <div className={styles.paneArea}>
-              <PreviewFrame
-                files={files}
-                entry={question.entry}
-                handlersPath={question.handlersPath}
-                runToken={runToken}
-                onConsole={onConsole}
-                onNetwork={onNetwork}
-                onStatus={onStatus}
-              />
-              {building ? (
-                <div className={styles.overlay}>
-                  <span className={styles.spinner} /> Bundling your app…
-                </div>
-              ) : null}
-              {buildErrors.length > 0 ? (
-                <div className={`${styles.buildErrors} mono`}>
-                  {buildErrors.map((e, i) => (
-                    <div key={i}>
-                      {e.file}:{e.line}:{e.column} — {e.text}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          )}
+          </div>
+
+          <div
+            className={styles.paneArea}
+            style={{ display: rightTab === 'preview' ? undefined : 'none' }}
+          >
+            <PreviewFrame
+              ref={previewRef}
+              files={files}
+              entry={question.entry}
+              handlersPath={question.handlersPath}
+              runToken={runToken}
+              onConsole={onConsole}
+              onNetwork={onNetwork}
+              onStatus={onStatus}
+              onLoaded={onPreviewLoaded}
+            />
+            {building || !previewLoaded ? (
+              <div className={styles.overlay}>
+                <span className={styles.spinner} />
+                {building
+                  ? 'Bundling your app…'
+                  : 'Starting the preview — first load can take a little while…'}
+              </div>
+            ) : null}
+            {buildErrors.length > 0 ? (
+              <div className={`${styles.buildErrors} mono`}>
+                {buildErrors.map((e, i) => (
+                  <div key={i}>
+                    {e.file}:{e.line}:{e.column} — {e.text}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
 
           <DevToolsPanel
             tab={bottomTab}

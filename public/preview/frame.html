@@ -42,17 +42,31 @@
         white-space: pre-wrap;
       }
     </style>
+    <!--
+      The question's own CSS goes here, set by the 'run' handler below. Kept
+      as a separate, always-present element (rather than injecting/removing a
+      new <style> each run) so there is one place to replace, never a stack
+      of stale rules from a previous run competing with the current ones.
+    -->
+    <style id="debuglab-question-css"></style>
   </head>
   <body>
     <div id="root"></div>
     <pre id="debuglab-crash"></pre>
     <script>
       (function () {
+        // This same file is used two ways: embedded in a sandboxed iframe
+        // (where `parent` is the host page), and popped out into its own
+        // real browser tab via window.open() (where there is no parent --
+        // `window.parent` is just this window itself -- but `window.opener`
+        // points back to the tab that opened it). Picking whichever target
+        // actually exists lets one file serve both.
         function post(type, payload) {
           try {
-            parent.postMessage({ source: 'debuglab-preview', type: type, payload: payload }, '*');
+            var target = window.opener && !window.opener.closed ? window.opener : parent;
+            target.postMessage({ source: 'debuglab-preview', type: type, payload: payload }, '*');
           } catch (e) {
-            /* parent gone */
+            /* target gone */
           }
         }
 
@@ -78,6 +92,7 @@
         });
 
         var crash = document.getElementById('debuglab-crash');
+        var questionCss = document.getElementById('debuglab-question-css');
         function showCrash(text) {
           crash.textContent = text;
           crash.style.display = 'block';
@@ -104,6 +119,12 @@
           crash.style.display = 'none';
           crash.textContent = '';
           document.getElementById('root').innerHTML = '';
+          // esbuild emits a question's CSS imports as separate text from the
+          // JS, not inlined into it -- see src/preview/bundler.ts. Replacing
+          // (not appending) means switching between a styled fix and the
+          // unstyled original, or hitting Reset, never leaves a previous
+          // run's rules still in effect alongside the current ones.
+          questionCss.textContent = data.css || '';
 
           // Inline module script text, not a blob: URL passed to import().
           // This document is a sandboxed iframe with an opaque origin (no

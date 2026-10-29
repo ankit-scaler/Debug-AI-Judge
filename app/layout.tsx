@@ -27,7 +27,17 @@ try {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${jetbrains.variable}`}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${jetbrains.variable}`}
+      // The inline theme script below sets data-theme before hydration, which
+      // intentionally differs from the server-rendered markup (the server has
+      // no way to know the viewer's stored preference). This is the standard
+      // Next.js escape hatch for exactly that case; without it, every load
+      // logged a hydration-mismatch error for an attribute that was never
+      // meant to match.
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>

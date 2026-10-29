@@ -1,3 +1,4 @@
+import './App.css';
 import { CartProvider } from './CartContext.jsx';
 import { Header } from './Header.jsx';
 import { ProductList } from './ProductList.jsx';
