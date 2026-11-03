@@ -6,6 +6,7 @@ import {
   stripNamespaceEverywhere,
   VIRTUAL_NAMESPACE,
 } from '../bundling/resolve';
+import { DEVTOOLS_VIRTUAL, devtoolsModuleFor } from './devtools-source';
 import { INTERCEPTOR_MODULE } from './interceptor-source';
 
 export interface PreviewFile {
@@ -86,6 +87,10 @@ export async function bundlePreview(options: BundleOptions): Promise<PreviewBund
   if (options.handlersPath) {
     map.set(INTERCEPTOR, INTERCEPTOR_MODULE.replace('./__HANDLERS__', `./${options.handlersPath}`));
     imports.push(`import './${INTERCEPTOR}';`);
+    // Imported from the entry even when no question file imports it, so the
+    // terminal-run listener exists in every preview with a mock backend.
+    map.set(DEVTOOLS_VIRTUAL, devtoolsModuleFor(options.handlersPath));
+    imports.push(`import './${DEVTOOLS_VIRTUAL}';`);
   }
 
   map.set(

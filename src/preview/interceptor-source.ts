@@ -54,6 +54,7 @@ globalThis.fetch = async function (input, init) {
       requestBody: typeof requestBody === 'string' ? requestBody : null,
       responseBody: 'No mock handler matched this request.',
       durationMs: 0,
+      startedAt,
     });
     if (!realFetch) throw new Error('No mock handler for ' + method + ' ' + url);
     return realFetch(input, init);
@@ -78,6 +79,7 @@ globalThis.fetch = async function (input, init) {
     requestBody: typeof requestBody === 'string' ? requestBody : null,
     responseBody: text,
     durationMs: Date.now() - startedAt,
+    startedAt,
   });
 
   return new Response(text, {

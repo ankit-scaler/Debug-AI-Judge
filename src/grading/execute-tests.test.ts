@@ -210,3 +210,37 @@ test('require and process are not exposed inside the vm context', async () => {
     tests: [{ name: 'cannot see process', passed: true, error: null }],
   });
 });
+
+test('a question file importing ../__devtools__.js builds and runs under Submit', async () => {
+  const result = await executeTests(
+    [
+      {
+        path: 'mock/handlers.js',
+        content: `import { add } from '../server-sim/cart.js';
+          export const handlers = [];
+          export const terminalHandlers = { x: () => add() };`,
+      },
+      {
+        path: 'server-sim/cart.js',
+        content: `import { serverLog } from '../__devtools__.js';
+          export function add() { serverLog('info', 'add called'); return 2; }`,
+      },
+      {
+        path: 'tests/cart.test.js',
+        content: `
+          import { add } from '../server-sim/cart.js';
+          const { it, expect } = globalThis.__debuglab_harness__;
+          it('add still works with serverLog inside it', () => {
+            expect(add()).toBe(2);
+          });
+        `,
+      },
+    ],
+    'tests/cart.test.js',
+    'mock/handlers.js',
+  );
+  expect(result).toEqual({
+    status: 'ran',
+    tests: [{ name: 'add still works with serverLog inside it', passed: true, error: null }],
+  });
+});
