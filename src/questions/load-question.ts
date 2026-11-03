@@ -34,6 +34,20 @@ export interface QuestionMeta {
    * to the learner as an ordinary readonly file (see toLearnerQuestion).
    */
   testEntry?: string;
+  /**
+   * Question-declared terminal commands (the Terminal tab's non-platform-native
+   * set). `command` is the exact string a learner types; `id` is the key into
+   * mock/handlers.js's `terminalHandlers` export, which actually runs it inside
+   * the preview iframe (see src/preview/devtools-source.ts). Metadata only --
+   * the server never executes question files.
+   */
+  terminalCommands?: TerminalCommand[];
+}
+
+export interface TerminalCommand {
+  id: string;
+  command: string;
+  help: string;
 }
 
 export interface LoadedQuestion {
@@ -84,6 +98,7 @@ export interface LearnerQuestion {
   files: QuestionFile[];
   gradingMode?: 'llm' | 'tests';
   testEntry?: string;
+  terminalCommands?: TerminalCommand[];
 }
 
 /**
@@ -111,5 +126,6 @@ export function toLearnerQuestion(loaded: LoadedQuestion): LearnerQuestion {
     files: loaded.questionFiles.filter((f) => f.visibility !== 'hidden'),
     gradingMode: meta.gradingMode,
     testEntry: meta.testEntry,
+    terminalCommands: meta.terminalCommands,
   };
 }
