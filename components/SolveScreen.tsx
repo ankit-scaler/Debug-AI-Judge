@@ -168,7 +168,10 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     }
   }, [contents, files, question]);
 
-  const passed = result !== null && result.status === 'graded' && result.passed;
+  const passed =
+    result !== null &&
+    (result.status === 'graded' || result.status === 'tests_ran') &&
+    result.passed;
 
   const showNextHint = useCallback(async () => {
     setHintsLoading(true);

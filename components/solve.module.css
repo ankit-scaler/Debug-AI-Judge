@@ -535,3 +535,25 @@
   border-color: var(--danger);
   color: var(--danger);
 }
+
+.testLog {
+  margin: 0;
+  padding: var(--space-3);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.testLine {
+  padding: 2px 0;
+}
+
+.testError {
+  margin: 2px 0 6px var(--space-4);
+  color: var(--danger);
+  white-space: pre-wrap;
+}

@@ -382,3 +382,126 @@ went against the recommendation, that is noted explicitly.
 - **Also fixes an unannounced inefficiency**: returning to Preview after
   editing code no longer re-bundles and reloads unless Run is actually
   clicked.
+
+## 2026-10-29 to 2026-11-03 — Hints, gated solutions, full-repo editing, real-test grading
+
+Several sessions' worth of decisions that should have been logged at the time
+and were not; recorded together now, backfilled from the actual conversation
+record rather than from memory.
+
+### D24. Every question's editable surface widened to the whole `src/` tree
+- **Decision:** all `questions/*/files/src/**` files became `editable`
+  (previously only the one or two files that happened to contain the bug
+  were). `mock/handlers.js` and `notes/author-notes.md` are the only files
+  that stay `readonly`/`hidden`, unchanged.
+- **Reason:** the *set* of editable files was itself a spoiler -- a learner
+  given only `CartContext.jsx` as editable already knows that's where the
+  bug is, before reading a line of code. Full-repo editing (one of several
+  initiatives discussed) was the one actually chosen to ship.
+- **Alternatives rejected:** a genuinely separate "full repo, no editable
+  restriction" learner *mode* as its own initiative, built alongside the
+  existing restricted mode. Rejected for now in favour of just widening the
+  existing mode -- two parallel question formats would double the authoring
+  surface for a distinction (which files are editable) that doesn't change
+  how a question is graded.
+- **Still true:** `mock/handlers.js` must stay readonly (a learner could
+  "fix" a bug by making the fake backend lie instead of fixing real code)
+  and hidden author notes must stay hidden (they name the bug outright).
+
+### D25. `esbuild-wasm` added to `serverExternalPackages`
+- **Decision:** `next.config.ts`'s `serverExternalPackages` gained
+  `'esbuild-wasm'` alongside the existing `'esbuild'`.
+- **Reason:** found by actually running `npm run build` (the real Vercel
+  build command) for the first time all session -- previously only `next
+  dev` had been exercised. Production SSR renders `SolveScreen.tsx`'s
+  (`'use client'`) initial HTML server-side, pulling `bundler.ts` -- and
+  therefore `esbuild-wasm` -- into the SSR module graph. `esbuild-wasm`'s
+  module has a Node `child_process` code path (for native CLI use) whose
+  spawn target Turbopack cannot statically resolve, failing the whole build,
+  even though that code path is never reached during SSR (`bundlePreview()`
+  only runs inside a `useEffect`).
+- **Verified**, not just reasoned about: reproduced the exact Vercel failure
+  locally with `npm run build`, applied the fix, confirmed a clean build
+  (TypeScript included) before telling the user to redeploy.
+
+### D26. Hints are revealed one at a time through their own route, never bundled upfront
+- **Decision:** `QuestionMeta.hints: string[]` (ordered least to most
+  revealing), served via `GET /api/questions/[slug]/hints?index=N` →
+  `{ hint, hasMore }`. Excluded from `toLearnerQuestion`'s payload the same
+  way the rubric and reference fix are.
+- **Reason:** bundling all hints into the initial page load would let a
+  learner read the network response or page source and see every hint at
+  once, defeating "revealed one at a time" even though hints aren't as
+  sensitive as the rubric.
+- **Alternatives rejected:** revealing all hints at once in a collapsed
+  section (simpler, but the user explicitly asked for progressive reveal);
+  hand-writing hints as plain UI copy with no backing data (loses the
+  per-question authoring consistency the rest of the question model has).
+
+### D27. Solution reveal: free after passing, costs the question's score if used before
+- **Decision:** two routes. `GET /api/questions/[slug]/solution` (no side
+  effect; the SolveScreen only shows its button once `result.passed` is
+  true) for reviewing the reference fix after a genuine pass. `POST
+  /api/attempts/[slug]/give-up` permanently marks that user+question
+  ineligible to score (`grade()`'s new `gaveUp` dependency, checked on every
+  submission, cached or fresh) before handing back the same reference fix.
+- **Reason:** a learner who views the solution and pastes it back must never
+  be indistinguishable from one who actually solved it. A single endpoint
+  with a "did they already pass" check would not catch this -- give-up has
+  to be its own action with its own permanent consequence, independent of
+  whether a later submission happens to pass.
+- **Known limitation, accepted rather than fixed:** there is still no login
+  (D12), so "permanently ineligible" is tracked per browser session against
+  a shared local user id, the same limitation the existing spend ceiling and
+  first-pass tracking already have -- not a new gap this introduced, but
+  worth naming again here since it directly affects what "give up" enforces.
+
+### D28. A second grading mode: real executed tests, run server-side, for one question so far
+- **Decision:** `QuestionMeta.gradingMode: 'llm' | 'tests'` (default `'llm'`,
+  every prior question unaffected). For `'tests'`, Submit skips `grade()`'s
+  LLM path entirely and calls `executeTests()`
+  (`src/grading/execute-tests.ts`): it bundles the submission plus a ported
+  test file with the server's real `esbuild` (reusing `src/bundling/
+  resolve.ts`, the same resolver `build-gate.ts` uses) and executes the
+  bundle in a `node:vm` context -- real PASS/FAIL, real assertion messages,
+  never an LLM's paraphrase of them.
+- **Reason:** the user added a complete standalone lab (React + Express +
+  SQLite, with a real `node:test`/Vitest suite) and asked whether the
+  platform could support something like it. Running the real lab as-is was
+  rejected (`better-sqlite3` is a native module with no browser path, and
+  stock sandboxed execution was explicitly out of scope per D1); the chosen
+  middle path simulates the backend+DB client-side (reusing the existing
+  mock-handler/interceptor pattern, no new infrastructure) while keeping
+  grading itself genuinely real rather than LLM-judged.
+- **Why server-side, not just the learner's own browser:** a browser-only
+  "run tests and self-report" design would let a technically sophisticated
+  learner tamper with the test harness in their own devtools to fake a
+  pass. Submit never trusts the client for the LLM path either; the same
+  rule applies here.
+- **New dependencies:** `jsdom` + `@types/jsdom`, needed only because a
+  ported test that renders real React components (via `react-dom/client` +
+  `act()`) needs a real DOM. Dev/server-only, never shipped to the browser.
+- **Hand-rolled `describe`/`it`/`expect` harness** (`src/testing/
+  browser-test-harness.ts`) instead of bundling `vitest`/`node:test`
+  themselves: neither is meant to run inside a bundled `node:vm` script, and
+  the ported tests only ever use a small, known set of assertions.
+- **`node:vm`'s own `timeout` option only bounds synchronous execution** (an
+  infinite `while(true)`); it does not interrupt code awaiting a promise or
+  timer that never resolves. The real wall-clock bound is a `Promise.race`
+  in `executeTests()`; the vm `timeout` is kept too, as a second, cheaper
+  line of defence for the synchronous case. This is not a hard security
+  boundary (bare `vm` contexts are not escape-proof against someone
+  deliberately trying) -- adequate for grading a debugging exercise, not for
+  arbitrary untrusted execution.
+- **Known, accepted limitation:** a ported test that renders real components
+  leaves a couple of Node `MessagePort` handles open per run (React's
+  scheduler re-refs them internally in a way that could not be overridden
+  without silently breaking its own message delivery -- tried, reverted).
+  Harmless for this deployment (the Next.js server is already long-running
+  and does not need to exit between requests), but worth knowing if handle
+  counts ever matter under sustained load.
+- **First question built on this:** `questions/flipkart-cart-lab/`, ported
+  from the user's lab -- all three of its real bugs, 12 of its 15 original
+  tests (3 generic auth-edge-case tests not tied to any of the three bugs
+  were trimmed; noted in the question's own hidden author notes, not just
+  here).

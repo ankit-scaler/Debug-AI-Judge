@@ -9,7 +9,15 @@ test('lists every question directory', async () => {
   expect(slugs).toContain('makemytrip-flight-search');
   expect(slugs).toContain('zomato-restaurant-discovery');
   expect(slugs).toContain('taskforge-board');
-  expect(slugs.length).toBe(5);
+});
+
+// questions/"Standard Flipkart Question" is reference material someone
+// dropped into the questions/ tree directly (no question.json of its own) --
+// this must not crash the homepage.
+test('a directory under questions/ with no question.json is skipped, not a crash', async () => {
+  const list = await listQuestions();
+  const slugs = list.map((q) => q.slug);
+  expect(slugs).not.toContain('Standard Flipkart Question');
 });
 
 test('summaries are sorted by slug', async () => {

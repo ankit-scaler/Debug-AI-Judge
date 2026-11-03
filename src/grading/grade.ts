@@ -169,7 +169,9 @@ export async function grade(input: GradeInput, deps: GradeDeps): Promise<GradeOu
   };
 }
 
-function mergeFiles(questionFiles: QuestionFile[], submitted: SubmittedFile[]): SubmittedFile[] {
+/** Exported for the test-grading submit path (app/api/attempts/[slug]/submit), which needs the
+ *  same merge without going through the LLM-grading grade() call. */
+export function mergeFiles(questionFiles: QuestionFile[], submitted: SubmittedFile[]): SubmittedFile[] {
   const bySubmitted = new Map(submitted.map((f) => [f.path, f.content]));
   return questionFiles.map((f) => ({
     path: f.path,

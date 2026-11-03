@@ -23,6 +23,10 @@ export interface QuestionSummary {
  * `toLearnerQuestion` in load-question.ts: no rubric, no entry/handlersPath,
  * no symptom. Adding a field to QuestionMeta later cannot leak here by being
  * forgotten.
+ *
+ * A directory under `questions/` with no `question.json` (reference material
+ * someone dropped in, a half-authored question, a stray `.DS_Store` folder)
+ * is skipped, not a crash -- this listing is read on every homepage load.
  */
 export async function listQuestions(): Promise<QuestionSummary[]> {
   const entries = await readdir(QUESTIONS_ROOT, { withFileTypes: true });
@@ -31,12 +35,17 @@ export async function listQuestions(): Promise<QuestionSummary[]> {
     .map((e) => e.name)
     .sort();
 
-  return Promise.all(
+  const summaries = await Promise.all(
     slugs.map(async (slug) => {
-      const meta = JSON.parse(
-        await readFile(join(QUESTIONS_ROOT, slug, 'question.json'), 'utf8'),
-      ) as QuestionMeta;
-      return {
+      let meta: QuestionMeta;
+      try {
+        meta = JSON.parse(
+          await readFile(join(QUESTIONS_ROOT, slug, 'question.json'), 'utf8'),
+        ) as QuestionMeta;
+      } catch {
+        return null;
+      }
+      const summary: QuestionSummary = {
         slug: meta.slug,
         title: meta.title,
         company: meta.company,
@@ -45,6 +54,9 @@ export async function listQuestions(): Promise<QuestionSummary[]> {
         scenario: meta.scenario,
         timeLimitSec: meta.timeLimitSec,
       };
+      return summary;
     }),
   );
+
+  return summaries.filter((s): s is QuestionSummary => s !== null);
 }

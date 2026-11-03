@@ -9,6 +9,12 @@ export interface CriterionResult {
   evidence: string;
 }
 
+export interface TestResultLine {
+  name: string;
+  passed: boolean;
+  error: string | null;
+}
+
 export type SubmitResult =
   | {
       status: 'graded';
@@ -18,10 +24,18 @@ export type SubmitResult =
       gaveUp: boolean;
       criteria: CriterionResult[];
     }
+  | {
+      status: 'tests_ran';
+      passed: boolean;
+      scored: boolean;
+      gaveUp: boolean;
+      tests: TestResultLine[];
+    }
   | { status: 'invalid_submission'; errors: string[] }
   | { status: 'build_failed'; errors: { file: string; line: number; column: number; text: string }[] }
   | { status: 'grading_unavailable'; message: string }
-  | { status: 'system_error'; message: string };
+  | { status: 'system_error'; message: string }
+  | { status: 'timed_out'; message: string };
 
 export function ResultCard({ result }: { result: SubmitResult | null }) {
   if (result === null) {
@@ -60,6 +74,48 @@ export function ResultCard({ result }: { result: SubmitResult | null }) {
       <div>
         <div className={`${styles.banner} ${styles.bannerNeutral}`}>Not graded</div>
         <p className={styles.criterionText}>{result.message}</p>
+      </div>
+    );
+  }
+
+  if (result.status === 'timed_out') {
+    return (
+      <div>
+        <div className={`${styles.banner} ${styles.bannerFail}`}>Tests timed out</div>
+        <p className={styles.criterionText}>{result.message}</p>
+      </div>
+    );
+  }
+
+  if (result.status === 'tests_ran') {
+    const passedCount = result.tests.filter((t) => t.passed).length;
+    return (
+      <div>
+        <div
+          className={`${styles.banner} ${result.passed ? styles.bannerPass : styles.bannerFail}`}
+        >
+          {result.passed
+            ? `${result.tests.length} passed, 0 failed`
+            : `${passedCount} passed, ${result.tests.length - passedCount} failed`}
+        </div>
+
+        {result.gaveUp ? (
+          <p className={styles.empty}>
+            Not scored — you viewed this question&rsquo;s solution before solving it.
+          </p>
+        ) : null}
+
+        <pre className={`${styles.testLog} mono`}>
+          {result.tests.map((t, i) => (
+            <div key={i} className={styles.testLine}>
+              <span className={t.passed ? styles.ok : styles.bad}>
+                {t.passed ? 'PASS' : 'FAIL'}
+              </span>{' '}
+              {t.name}
+              {t.error ? <div className={styles.testError}>{t.error}</div> : null}
+            </div>
+          ))}
+        </pre>
       </div>
     );
   }

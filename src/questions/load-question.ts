@@ -20,6 +20,20 @@ export interface QuestionMeta {
   rubric: RubricCriterion[];
   /** Ordered least to most revealing. Never sent in the initial learner payload -- see toLearnerQuestion. */
   hints: string[];
+  /**
+   * 'llm' (default, every question before this field existed) grades via the
+   * rubric judge in src/grading/grade.ts. 'tests' grades via real executed
+   * test assertions -- see src/grading/execute-tests.ts -- and `rubric` is
+   * unused (set it to `[]`).
+   */
+  gradingMode?: 'llm' | 'tests';
+  /**
+   * Required when gradingMode is 'tests': path to the ported test file,
+   * executed server-side on Submit. Unlike the rubric, this is NOT a secret
+   * -- real test-driven debugging means reading the failing test, so it ships
+   * to the learner as an ordinary readonly file (see toLearnerQuestion).
+   */
+  testEntry?: string;
 }
 
 export interface LoadedQuestion {
@@ -68,6 +82,8 @@ export interface LearnerQuestion {
   scenario: string;
   symptom: string;
   files: QuestionFile[];
+  gradingMode?: 'llm' | 'tests';
+  testEntry?: string;
 }
 
 /**
@@ -93,5 +109,7 @@ export function toLearnerQuestion(loaded: LoadedQuestion): LearnerQuestion {
     scenario: meta.scenario,
     symptom: meta.symptom,
     files: loaded.questionFiles.filter((f) => f.visibility !== 'hidden'),
+    gradingMode: meta.gradingMode,
+    testEntry: meta.testEntry,
   };
 }

@@ -1,4 +1,6 @@
-import { grade, type GradeOutcome } from '@/src/grading/grade';
+import { executeTests } from '@/src/grading/execute-tests';
+import { grade, mergeFiles, type GradeOutcome } from '@/src/grading/grade';
+import { validateSubmission } from '@/src/grading/validate-submission';
 import { loadQuestion } from '@/src/questions/load-question';
 import { localGradeDeps, localSpend } from '@/src/server/local-deps';
 import type { SubmittedFile } from '@/src/types';
@@ -14,10 +16,19 @@ type SubmitResponse =
       gaveUp: boolean;
       criteria: { id: string; description: string; passed: boolean; evidence: string }[];
     }
+  | {
+      /** gradingMode: 'tests' -- real executed test assertions, not an LLM rubric. */
+      status: 'tests_ran';
+      passed: boolean;
+      scored: boolean;
+      gaveUp: boolean;
+      tests: { name: string; passed: boolean; error: string | null }[];
+    }
   | { status: 'invalid_submission'; errors: string[] }
   | { status: 'build_failed'; errors: { file: string; line: number; column: number; text: string }[] }
   | { status: 'grading_unavailable'; message: string }
-  | { status: 'system_error'; message: string };
+  | { status: 'system_error'; message: string }
+  | { status: 'timed_out'; message: string };
 
 export async function POST(request: Request, ctx: { params: Promise<{ slug: string }> }) {
   const { slug } = await ctx.params;
@@ -36,6 +47,74 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
 
   const loaded = await loadQuestion(slug);
   const deps = await localGradeDeps();
+
+  if (loaded.meta.gradingMode === 'tests') {
+    const validation = validateSubmission(submitted, loaded.questionFiles);
+    if (!validation.ok) {
+      return Response.json(
+        { status: 'invalid_submission', errors: validation.errors } satisfies SubmitResponse,
+        { status: 400 },
+      );
+    }
+
+    const merged = mergeFiles(loaded.questionFiles, submitted);
+
+    if (!loaded.meta.testEntry) {
+      // An authoring mistake (gradingMode: 'tests' with no testEntry set),
+      // not something a learner's submission can cause -- never blame it on
+      // their code.
+      console.error(`[submit] "${slug}" has gradingMode: 'tests' but no testEntry set`);
+      return Response.json({
+        status: 'system_error',
+        message: 'Grading failed for a technical reason. Your code is safe — try again.',
+      } satisfies SubmitResponse);
+    }
+
+    // No separate buildCheck() pre-pass here, unlike the LLM path: for
+    // 'tests' mode, executeTests() below already runs its own esbuild build
+    // of the *test* bundle (which, via the mock-handler interceptor, reaches
+    // every editable file this question has -- not just whatever the app
+    // entry's own import graph happens to reach) and fails fast on a
+    // compile error before ever touching jsdom/vm. A prior version here
+    // build-checked only loaded.meta.entry (the app entry), which missed
+    // server-sim/cartHandlers.js and server-sim/db.js entirely -- they are
+    // wired in dynamically by the interceptor, not statically imported by
+    // src/App.jsx.
+    //
+    // 20s, not the (already-raised) 15s default: this is the production
+    // path, and a suite that renders real components has little margin to
+    // spare on a loaded server.
+    const executed = await executeTests(merged, loaded.meta.testEntry, loaded.meta.handlersPath, 20000);
+
+    if (executed.status === 'build_failed') {
+      return Response.json(
+        { status: 'build_failed', errors: executed.errors } satisfies SubmitResponse,
+      );
+    }
+    if (executed.status === 'timed_out') {
+      return Response.json({
+        status: 'timed_out',
+        message:
+          'The tests did not finish in time. If your change added a loop or an await that ' +
+          'never resolves, that is almost always why.',
+      } satisfies SubmitResponse);
+    }
+
+    const passed = executed.tests.length > 0 && executed.tests.every((t) => t.passed);
+    // Same anti-cheat rule as LLM-graded questions (grade.ts): a learner who
+    // viewed the solution before passing never scores, on any grading mode.
+    const hasGivenUp = await deps.gaveUp.has(deps.userId, loaded.meta.id);
+    const scored =
+      passed && !hasGivenUp ? await deps.firstPass.claim(deps.userId, loaded.meta.id) : false;
+
+    return Response.json({
+      status: 'tests_ran',
+      passed,
+      scored,
+      gaveUp: hasGivenUp,
+      tests: executed.tests,
+    } satisfies SubmitResponse);
+  }
 
   const outcome: GradeOutcome = await grade(
     {
