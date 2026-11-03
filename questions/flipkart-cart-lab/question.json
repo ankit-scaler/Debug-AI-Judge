@@ -11,6 +11,12 @@
   "handlersPath": "mock/handlers.js",
   "gradingMode": "tests",
   "testEntry": "tests/all.test.js",
+  "terminalCommands": [
+    { "id": "repro-stale", "command": "npm run repro -- stale", "help": "reproduce the wrong cart badge (problem 1) -- drives the running app; log in first" },
+    { "id": "repro-dup", "command": "npm run repro -- dup", "help": "reproduce the duplicate cart rows (problem 2)" },
+    { "id": "repro-stock", "command": "npm run repro -- stock", "help": "reproduce overselling the Dumbbell Set (problem 3)" },
+    { "id": "db-inspect", "command": "npm run db:inspect", "help": "print cart_items, duplicate lines and carts" }
+  ],
   "scenario": "A small but realistic shop (React + a simulated Express-style backend) with login, a catalog, a cart and checkout. Support is getting tickets: \"I tapped Add to cart on the Yoga Mat three times quickly. The cart number in the header said 3, then 2, then 1. I refreshed and now there are three separate Yoga Mat lines in my cart.\" There is no error in the console and every request returns HTTP 200.",
   "symptom": "Tap Add to cart on the same product several times, fast. The header badge settles on the wrong number. Refresh and open the cart: instead of one line with the right quantity, there are several separate lines of quantity 1. On the Dumbbell Set (stock 3), tapping 5 times fast can put more units in the cart than the shop has in stock.",
   "visibility": {
@@ -25,11 +31,11 @@
     "src/components/Header.jsx": "readonly",
     "src/components/Notice.jsx": "readonly",
     "src/components/AddToCartButton.jsx": "readonly",
-    "src/components/DebugPanel.jsx": "readonly",
     "src/pages/Login.jsx": "readonly",
     "src/pages/Catalog.jsx": "readonly",
     "src/pages/CartPage.jsx": "readonly",
     "src/pages/Checkout.jsx": "readonly",
+    "src/pages/Orders.jsx": "readonly",
     "server-sim/auth.js": "readonly",
     "server-sim/pricing.js": "readonly",
     "server-sim/orderHandlers.js": "readonly",
@@ -43,7 +49,7 @@
   },
   "rubric": [],
   "hints": [
-    "Open the app with ?debug=1 in the URL — a Request log panel appears showing every Add to cart response in the order it ARRIVED. Tap the same product three times fast and watch: does the badge end up matching the order you tapped, or the order the responses came back?",
+    "Log in, stay on the catalog, and type `npm run repro -- stale` in the Terminal tab. It taps Add to cart on the Yoga Mat three times and lets the responses come back newest-first, the way a slow network can. It prints the order the responses ARRIVED in and every number the header badge showed. Does the badge end on the cart's real total, or on whichever response happened to arrive last?",
     "That's Problem 1, in src/context/CartContext.jsx. Its mutate() function calls setCart() for whatever response arrives, with no way to tell a late (stale) response apart from the newest one.",
     "Refresh the page after a burst of taps and open the cart. Problem 2 lives where the cart is actually stored: server-sim/cartHandlers.js reads what the cart currently holds, then awaits a network-like delay, then writes — and nothing stops two requests from both reading before either writes.",
     "Fixing cartHandlers.js alone isn't the whole fix for Problem 2 — one of the tests inserts directly into the simulated database, bypassing your route entirely. Check server-sim/db.js: does anything stop two rows for the same (cart, product) pair from existing side by side?",

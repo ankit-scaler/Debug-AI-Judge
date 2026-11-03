@@ -12,6 +12,11 @@ export function Header() {
         Flipkart
       </button>
       <nav>
+        {user && (
+          <button className="link" onClick={() => navigate('orders')}>
+            Orders
+          </button>
+        )}
         {user ? (
           <button className="link" onClick={logout}>
             Logout ({user.name.split(' ')[0]})

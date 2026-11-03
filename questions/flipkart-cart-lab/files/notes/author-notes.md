@@ -60,3 +60,32 @@ output in ResultCard.tsx. On the untouched code, exactly 6 of 12 tests fail
 (three cart.test.js tests tied to Problems 2/3, the duplicate-rejection
 test, the checkout knock-on test, and the client race test) -- the same
 split the real lab's own README documents.
+
+## Platform fidelity notes (2026-11-03 retrofit)
+
+- `ProductPage.jsx` from the reference lab is a deliberate drop, not a gap: the
+  catalog's own Add-to-cart already exercises every bug class this question
+  teaches (races/duplicates/oversell), and a detail page adds surface area with
+  no pedagogical return.
+- `?debug=1`/`DebugPanel.jsx` (the reference's Request-log panel) is retired in
+  favor of the platform's Terminal tab, Logs tab (Server filter) and Network
+  tab (Timeline view), which generalize the same capability to every question.
+- `npm run repro -- dup|stock` send real fetch() requests through the same
+  interceptor the app uses (so they show in Network and Logs), 60ms apart, and
+  report responses in true arrival order -- a port of the reference's
+  scripts/repro.js.
+- `npm run repro -- stale` cannot be a server-side burst here: in this
+  simulation the pricing delay sits before the write, so responses always reach
+  the client in the order the server produced them, and a plain burst never
+  shows Problem 1 (the reference delays the RESPONSE instead, via its
+  LATENCY=lab middleware). The command therefore drives the real app (clicks the
+  real button, watches the real badge) and uses api.js's `__setFetchOverride`
+  to hand responses back newest-first -- the same network condition the
+  reference simulates and that tests/CartContext.test.jsx uses.
+- Known consequence of the same difference, NOT fixed by this retrofit: a
+  learner tapping by hand in the live preview will generally not see Problem 1
+  at all, and with only the reference CartContext fix (last-SENT request wins)
+  a hand-tapped burst can settle on the oldest snapshot, because the server's
+  completion order is the reverse of send order. Fixing that means moving the
+  simulated latency from pricing.js to the response (like the reference) and
+  re-validating the whole test suite -- a separate change.
