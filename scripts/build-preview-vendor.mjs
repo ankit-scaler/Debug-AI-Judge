@@ -122,6 +122,16 @@ for (const target of TARGETS) {
   console.log(`vendored ${target.specifier} -> public/preview/vendor/${target.file}`);
 }
 
+// src/testing/browser-test-harness.ts has zero imports, so its raw text is
+// all `npm test` (src/preview/test-bundler.ts) needs -- esbuild-wasm
+// transpiles it as a virtual .ts file, exactly as execute-tests.ts does with
+// readFileSync on the server. A browser cannot readFileSync, so bake the text
+// into a static asset instead. Regenerated on every `npm run dev`; after
+// editing the harness mid-session, re-run `npm run build:preview`.
+const harnessSource = await readFile(join(root, 'src', 'testing', 'browser-test-harness.ts'), 'utf8');
+await writeFile(join(outDir, 'harness-source.txt'), harnessSource);
+console.log('copied browser-test-harness.ts -> public/preview/vendor/harness-source.txt');
+
 await copyFile(
   join(root, 'node_modules', 'esbuild-wasm', 'esbuild.wasm'),
   join(root, 'public', 'preview', 'esbuild.wasm'),

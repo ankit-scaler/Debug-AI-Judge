@@ -50,7 +50,7 @@ const REACT_EXTERNALS = ['react', 'react-dom', 'react-dom/client', 'react/jsx-ru
 const GLOBAL_KEY = '__debuglabEsbuildInit';
 type GlobalWithInit = typeof globalThis & { [GLOBAL_KEY]?: Promise<void> };
 
-function ensureInitialised(): Promise<void> {
+export function ensureInitialised(): Promise<void> {
   const g = globalThis as GlobalWithInit;
   g[GLOBAL_KEY] ??= esbuild.initialize({ wasmURL: '/preview/esbuild.wasm' }).catch((err) => {
     if (err instanceof Error && err.message.includes('more than once')) {
