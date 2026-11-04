@@ -1,4 +1,6 @@
 // Fixed. Reference for the learner's fix to Problem 2 (part 1) and Problem 3.
+import { serverLog } from '../__devtools__.js';
+
 const MAX_PER_ADD = 10;
 
 export function getCart(store, userId) {
@@ -17,6 +19,7 @@ export async function postItems(store, pricing, userId, body) {
 
   const product = await pricing.quote(productId);
   if (!product) return { status: 404, body: { error: 'NOT_FOUND' } };
+  serverLog('info', `postItems: pricing replied for product ${productId} (stock ${product.stock})`);
 
   // Fix: read "what does this cart already hold" AFTER the only await, not
   // before it. Nothing else can run between this read and the write below --
@@ -24,7 +27,9 @@ export async function postItems(store, pricing, userId, body) {
   // finishes -- so this is effectively the transaction boundary.
   const existing = store.findCartItem(cart.id, productId);
   const nextQty = (existing?.quantity ?? 0) + qty;
+  serverLog('info', `postItems: read cart ${cart.id} -> ${existing?.quantity ?? 0} of product ${productId}`);
   if (nextQty > product.stock) {
+    serverLog('warn', `postItems: rejected product ${productId}, ${nextQty} > stock ${product.stock} (409)`);
     return {
       status: 409,
       body: { error: 'OUT_OF_STOCK', productId, available: Math.max(0, product.stock - (existing?.quantity ?? 0)) },
@@ -37,6 +42,7 @@ export async function postItems(store, pricing, userId, body) {
     store.insertCartItemDirect(cart.id, productId, qty);
   }
   store.bumpVersion(cart.id);
+  serverLog('info', `postItems: wrote product ${productId} quantity ${nextQty}, cart ${cart.id} now v${cart.version}`);
 
   return { status: 200, body: store.loadCart(cart.id) };
 }

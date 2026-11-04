@@ -2,18 +2,26 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { CodeEditor } from './CodeEditor';
-import { DevToolsPanel, type BottomTab } from './DevToolsPanel';
+import { DevToolsPanel, type BottomTab, type LogLine } from './DevToolsPanel';
 import { FileTree } from './FileTree';
 import {
   PreviewFrame,
   type ConsoleLine,
   type NetworkEntry,
   type PreviewFrameHandle,
+  type TerminalOutput,
 } from './PreviewFrame';
 import type { SubmitResult } from './ResultCard';
+import type { TerminalLine } from './TerminalPanel';
 import styles from './solve.module.css';
 import { useTheme } from './useTheme';
+import { renderMarkdown } from '@/src/markdown/render-markdown';
 import { bundlePreview, type PreviewBuildError } from '@/src/preview/bundler';
+import { bundleTests } from '@/src/preview/test-bundler';
+import type { TestResult } from '@/src/testing/browser-test-harness';
+
+/** Matches the Submit route's own executeTests() budget (20000ms). */
+const TERMINAL_COMMAND_TIMEOUT_MS = 20000;
 
 export interface LearnerFile {
   path: string;
@@ -31,7 +39,11 @@ export interface LearnerQuestionProps {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  description?: string;
   files: LearnerFile[];
+  gradingMode?: 'llm' | 'tests';
+  testEntry?: string;
+  terminalCommands?: { id: string; command: string; help: string }[];
 }
 
 type SubmitStage = 'checking' | 'grading' | null;
@@ -51,9 +63,9 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
     question.files.find((f) => f.visibility === 'editable')?.path ?? question.files[0]!.path,
   );
   const [rightTab, setRightTab] = useState<'code' | 'preview'>('preview');
-  const [bottomTab, setBottomTab] = useState<BottomTab>('console');
+  const [bottomTab, setBottomTab] = useState<BottomTab>('logs');
   const [runToken, setRunToken] = useState(1);
-  const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([]);
+  const [logLines, setLogLines] = useState<LogLine[]>([]);
   const [network, setNetwork] = useState<NetworkEntry[]>([]);
   const [building, setBuilding] = useState(false);
   const [buildErrors, setBuildErrors] = useState<PreviewBuildError[]>([]);
@@ -79,6 +91,15 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
   const [giveUpArmed, setGiveUpArmed] = useState(false);
   const [theme, toggleTheme] = useTheme();
   const previewRef = useRef<PreviewFrameHandle>(null);
+  const [terminalLines, setTerminalLines] = useState<TerminalLine[]>([]);
+  const [terminalBusy, setTerminalBusy] = useState(false);
+  // Bookkeeping for the one in-flight terminal command (the input is
+  // disabled while one runs, so there is never more than one):
+  const busyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const commandSeqRef = useRef(0); // source of runIds for terminal-run
+  const activeRunIdRef = useRef<number | null>(null); // terminal-output we are waiting for
+  const testsPendingRef = useRef(false); // test-results we are waiting for
+  const terminalGenRef = useRef(0); // bumped on cancel; an await that resumes into a newer generation drops its result
 
   const files = useMemo(
     () => question.files.map((f) => ({ path: f.path, content: contents[f.path] ?? f.content })),
@@ -95,7 +116,10 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
   const dirty = dirtyPaths.size > 0;
 
   const onConsole = useCallback((line: ConsoleLine) => {
-    setConsoleLines((prev) => [...prev, line]);
+    setLogLines((prev) => [...prev, { ...line, source: 'client' }]);
+  }, []);
+  const onServerLog = useCallback((line: ConsoleLine) => {
+    setLogLines((prev) => [...prev, { ...line, source: 'server' }]);
   }, []);
   const onNetwork = useCallback((entry: NetworkEntry) => {
     setNetwork((prev) => [...prev, entry]);
@@ -110,22 +134,171 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
   );
   const onPreviewLoaded = useCallback(() => setPreviewLoaded(true), []);
 
+  const appendTerminal = useCallback((...lines: TerminalLine[]) => {
+    setTerminalLines((prev) => [...prev, ...lines]);
+  }, []);
+
+  // Ends the current terminal command normally (its result arrived).
+  const finishCommand = useCallback(() => {
+    if (busyTimerRef.current !== null) clearTimeout(busyTimerRef.current);
+    busyTimerRef.current = null;
+    activeRunIdRef.current = null;
+    testsPendingRef.current = false;
+    setTerminalBusy(false);
+  }, []);
+
+  // Abandons the current terminal command (timeout, Run, Reset): any result
+  // that still arrives for it afterwards is ignored, and a hidden test
+  // iframe is torn down. Without this, terminalBusy could stay true forever
+  // -- e.g. Run remounting the iframe mid-command, a command posted before
+  // the new iframe generation attached its listener, or a test file
+  // throwing before the harness could report.
+  const cancelCommand = useCallback(() => {
+    terminalGenRef.current += 1;
+    previewRef.current?.cancelRunTests();
+    finishCommand();
+  }, [finishCommand]);
+
+  const startCommand = useCallback(
+    (label: string) => {
+      setTerminalBusy(true);
+      if (busyTimerRef.current !== null) clearTimeout(busyTimerRef.current);
+      busyTimerRef.current = setTimeout(() => {
+        cancelCommand();
+        appendTerminal({
+          kind: 'error',
+          text: `${label}: no result after ${TERMINAL_COMMAND_TIMEOUT_MS / 1000}s -- gave up. Press Run and try again.`,
+        });
+      }, TERMINAL_COMMAND_TIMEOUT_MS);
+    },
+    [appendTerminal, cancelCommand],
+  );
+
+  const onTerminalOutput = useCallback(
+    (output: TerminalOutput) => {
+      if (output.runId !== activeRunIdRef.current) return; // stale: timed out or cancelled
+      appendTerminal({ kind: output.ok ? 'output' : 'error', text: output.text });
+      finishCommand();
+    },
+    [appendTerminal, finishCommand],
+  );
+
+  const onTestResults = useCallback(
+    (tests: TestResult[]) => {
+      if (!testsPendingRef.current) return; // stale: timed out or cancelled
+      const passedCount = tests.filter((t) => t.passed).length;
+      appendTerminal(
+        ...tests.map(
+          (t): TerminalLine => ({
+            kind: t.passed ? 'output' : 'error',
+            text: `${t.passed ? 'PASS' : 'FAIL'}  ${t.name}${t.error ? `\n      ${t.error}` : ''}`,
+          }),
+        ),
+        {
+          kind: passedCount === tests.length ? 'output' : 'error',
+          text: `Tests: ${passedCount} passed, ${tests.length - passedCount} failed, ${tests.length} total`,
+        },
+      );
+      finishCommand();
+    },
+    [appendTerminal, finishCommand],
+  );
+
   const run = useCallback(() => {
-    setConsoleLines([]);
+    cancelCommand();
+    appendTerminal({ kind: 'output', text: '--- preview restarted (npm run dev) ---' });
+    setLogLines([]);
     setNetwork([]);
     setRightTab('preview');
     setPreviewLoaded(false);
     setRunToken((n) => n + 1);
-  }, []);
+  }, [appendTerminal, cancelCommand]);
 
   const reset = useCallback(() => {
+    cancelCommand();
+    appendTerminal({ kind: 'output', text: '--- files reset to the original broken code; preview restarted ---' });
     setContents(originals);
-    setConsoleLines([]);
+    setLogLines([]);
     setNetwork([]);
     setResult(null);
     setPreviewLoaded(false);
     setRunToken((n) => n + 1);
-  }, [originals]);
+  }, [originals, appendTerminal, cancelCommand]);
+
+  const hasTests = question.gradingMode === 'tests' && !!question.testEntry;
+
+  const onTerminalNpmTest = useCallback(async () => {
+    const testEntry = question.testEntry;
+    if (!testEntry) return; // unreachable: parseCommand only offers npm test when hasTests
+    if (buildErrors.length > 0) {
+      appendTerminal({ kind: 'error', text: 'The app failed to build -- fix the build errors, then Run.' });
+      return;
+    }
+    if (!previewLoaded) {
+      appendTerminal({ kind: 'error', text: 'The preview is still starting -- wait for it to load, then try again.' });
+      return;
+    }
+    // previewLoaded true means bundlePreview already called ensureInitialised()
+    // and it resolved -- esbuild-wasm's cold init (documented up to ~20s) is
+    // already paid for. Without this gate, npm test could call startCommand
+    // (arming the 20s TERMINAL_COMMAND_TIMEOUT_MS) and then spend most or all
+    // of that budget inside bundleTests's own await deps.init(), timing out on
+    // a cold init rather than on a real hang.
+    const gen = terminalGenRef.current;
+    startCommand('npm test');
+    testsPendingRef.current = true;
+    let sent = false;
+    try {
+      // Bundled fresh from the CURRENT editor contents every time -- never
+      // the last Run's bundle -- so an edit that was never Run is tested.
+      const bundle = await bundleTests({ files, testEntry, handlersPath: question.handlersPath });
+      if (gen !== terminalGenRef.current) return; // cancelled while bundling
+      if (!bundle.ok) {
+        appendTerminal(
+          { kind: 'error', text: 'npm test: the test bundle failed to build' },
+          ...bundle.errors.map((e): TerminalLine => ({ kind: 'error', text: `${e.file}:${e.line}:${e.column} — ${e.text}` })),
+        );
+        return;
+      }
+      const handle = previewRef.current;
+      if (!handle) throw new Error('the preview is not mounted');
+      handle.sendRunTests(bundle.code);
+      sent = true; // still busy: onTestResults (or the timeout) ends it
+    } catch (err) {
+      if (gen === terminalGenRef.current) {
+        appendTerminal({ kind: 'error', text: `npm test: ${(err as Error).message}` });
+      }
+    } finally {
+      if (!sent && gen === terminalGenRef.current) finishCommand();
+    }
+  }, [
+    files,
+    question.testEntry,
+    question.handlersPath,
+    buildErrors.length,
+    previewLoaded,
+    startCommand,
+    appendTerminal,
+    finishCommand,
+  ]);
+
+  const onTerminalQuestionCommand = useCallback(
+    (id: string, args: string) => {
+      if (buildErrors.length > 0) {
+        appendTerminal({ kind: 'error', text: 'The app failed to build -- fix the build errors, then Run.' });
+        return;
+      }
+      if (!previewLoaded) {
+        appendTerminal({ kind: 'error', text: 'The preview is still starting -- wait for it to load, then try again.' });
+        return;
+      }
+      const runId = ++commandSeqRef.current;
+      activeRunIdRef.current = runId;
+      startCommand(id);
+      previewRef.current?.sendTerminalCommand(id, args, runId);
+    },
+    [buildErrors.length, previewLoaded, appendTerminal, startCommand],
+  );
 
   const submit = useCallback(async () => {
     setBottomTab('results');
@@ -255,11 +428,17 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
           <p className={styles.company}>{question.company}</p>
           <h1 className={styles.title}>{question.title}</h1>
 
-          <p className={styles.sectionLabel}>Scenario</p>
-          <p className={styles.prose}>{question.scenario}</p>
+          {question.description ? (
+            renderMarkdown(question.description)
+          ) : (
+            <>
+              <p className={styles.sectionLabel}>Scenario</p>
+              <p className={styles.prose}>{question.scenario}</p>
 
-          <p className={styles.sectionLabel}>Reported symptom</p>
-          <p className={styles.symptom}>{question.symptom}</p>
+              <p className={styles.sectionLabel}>Reported symptom</p>
+              <p className={styles.symptom}>{question.symptom}</p>
+            </>
+          )}
 
           <div className={styles.tagRow}>
             <span className={styles.tag}>{question.difficulty}</span>
@@ -400,6 +579,9 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
               onNetwork={onNetwork}
               onStatus={onStatus}
               onLoaded={onPreviewLoaded}
+              onServerLog={onServerLog}
+              onTerminalOutput={onTerminalOutput}
+              onTestResults={onTestResults}
             />
             {building || !previewLoaded ? (
               <div className={styles.overlay}>
@@ -423,10 +605,23 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
           <DevToolsPanel
             tab={bottomTab}
             onTabChange={setBottomTab}
-            consoleLines={consoleLines}
+            logLines={logLines}
             network={network}
             result={result}
             solutionFiles={solutionFiles}
+            terminal={{
+              lines: terminalLines,
+              onLines: setTerminalLines,
+              busy: terminalBusy,
+              declaredCommands: question.terminalCommands ?? [],
+              hasTests,
+              files: question.files,
+              originals,
+              contents,
+              onRun: run,
+              onNpmTest: () => void onTerminalNpmTest(),
+              onQuestionCommand: onTerminalQuestionCommand,
+            }}
           />
         </main>
       </div>

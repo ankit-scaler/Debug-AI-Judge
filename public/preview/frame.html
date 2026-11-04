@@ -114,6 +114,20 @@
         window.addEventListener('message', function (event) {
           var data = event.data;
           if (!data || data.source !== 'debuglab-host') return;
+          if (data.type === 'run-tests') {
+            // Only ever sent to the hidden npm-test iframe (PreviewFrame.tsx),
+            // which is a brand-new document per run -- so nothing here needs
+            // cleaning up or guarding against a previous run. The test
+            // bundle's entry calls this exactly once, with the harness results.
+            window.__debuglab_test_report__ = function (tests) {
+              post('test-results', { tests: tests });
+            };
+            var testScript = document.createElement('script');
+            testScript.type = 'module';
+            testScript.textContent = data.code;
+            document.body.appendChild(testScript);
+            return;
+          }
           if (data.type !== 'run') return;
 
           crash.style.display = 'none';

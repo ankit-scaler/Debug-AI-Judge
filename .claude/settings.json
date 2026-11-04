@@ -5,7 +5,8 @@
       "ClaudeInChromeDomain(localhost:3125)",
       "Bash(cat)",
       "Bash(cp /tmp/flipkart-suite-check.mts ./flipkart-suite-check.mts)",
-      "Bash(cp /tmp/flipkart-suite-check2.mts ./flipkart-suite-check2.mts)"
+      "Bash(cp /tmp/flipkart-suite-check2.mts ./flipkart-suite-check2.mts)",
+      "ClaudeInChromeDomain(debug-ai-judge-d314kf63e-scaler-content-s-projects.vercel.app)"
     ]
   }
 }

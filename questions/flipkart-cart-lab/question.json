@@ -5,14 +5,42 @@
   "title": "Rapid taps break the cart in three different ways",
   "company": "Flipkart",
   "difficulty": "hard",
-  "tags": ["react", "async", "race-condition", "real-tests"],
+  "tags": [
+    "react",
+    "async",
+    "race-condition",
+    "real-tests"
+  ],
   "timeLimitSec": 3600,
   "entry": "src/App.jsx",
   "handlersPath": "mock/handlers.js",
   "gradingMode": "tests",
   "testEntry": "tests/all.test.js",
+  "terminalCommands": [
+    {
+      "id": "repro-stale",
+      "command": "npm run repro -- stale",
+      "help": "reproduce the wrong cart badge (problem 1) -- drives the running app; log in first"
+    },
+    {
+      "id": "repro-dup",
+      "command": "npm run repro -- dup",
+      "help": "reproduce the duplicate cart rows (problem 2)"
+    },
+    {
+      "id": "repro-stock",
+      "command": "npm run repro -- stock",
+      "help": "reproduce overselling the Dumbbell Set (problem 3)"
+    },
+    {
+      "id": "db-inspect",
+      "command": "npm run db:inspect",
+      "help": "print cart_items, duplicate lines and carts"
+    }
+  ],
   "scenario": "A small but realistic shop (React + a simulated Express-style backend) with login, a catalog, a cart and checkout. Support is getting tickets: \"I tapped Add to cart on the Yoga Mat three times quickly. The cart number in the header said 3, then 2, then 1. I refreshed and now there are three separate Yoga Mat lines in my cart.\" There is no error in the console and every request returns HTTP 200.",
   "symptom": "Tap Add to cart on the same product several times, fast. The header badge settles on the wrong number. Refresh and open the cart: instead of one line with the right quantity, there are several separate lines of quantity 1. On the Dumbbell Set (stock 3), tapping 5 times fast can put more units in the cart than the shop has in stock.",
+  "description": "A small but realistic shop (React + a simulated Express-style backend) with login, a catalog, a cart and checkout. **The cart is broken.** Your job is to find out why and fix it, in every layer where the problem lives.\n\n## 1. Run it\n\nClick **Run** to start the preview, then log in with `asha@example.com` or `ravi@example.com`, password `password123`.\n\nThe Terminal tab is your shell for this question -- type `help` there to see every command. The Logs tab (Server filter) and the Network tab (Timeline view) show what the reference lab's `?debug=1` Request-log panel showed: the order requests were sent in and the order their responses actually arrived.\n\n## 2. What is broken\n\nSupport is getting tickets like this one:\n\n> \"I tapped **Add to cart** on the Yoga Mat three times quickly. The cart number in the header said 3, then 2, then 1. I refreshed and now there are **three separate Yoga Mat lines** in my cart. Someone else says they ended up with more Dumbbells in their cart than the shop even has.\"\n\nThere is no error in the console and every request returns HTTP 200. There are **three distinct problems**. They look like one bug, but each one lives in a different layer and has a different fix.\n\n### Problem 1: The cart badge shows the wrong number\n\nTap **Add to cart** on the **Yoga Mat** **exactly 3 times, as fast as you can**.\n\n> Speed matters. If your taps are more than about a third of a second apart, the responses can come back in order and Problem 1 will not show. For an exact, repeatable result use `npm run repro -- stale` in the Terminal tab instead (see section 3).\n\n| Right after the taps | A few seconds later |\n|---|---|\n| ![Two responses have arrived; the badge shows 2](/questions/flipkart-cart-lab/img/01-mid-flight.png) | ![All responses have arrived; the badge shows 1](/questions/flipkart-cart-lab/img/02-badge-wrong.png) |\n\nLook at the Network tab's Timeline view. The responses come back in the **wrong order**: tap 3's response arrives first and tap 1's arrives last. The header ends on **1**, even though you tapped three times.\n\n**Expected:** the badge settles on the true cart total (3), whatever order the responses arrive in.\n\n### Problem 2: After a refresh the cart has duplicate lines\n\nRefresh the page and open the cart:\n\n![Cart page with three separate Yoga Mat lines, each of quantity 1](/questions/flipkart-cart-lab/img/03-cart-after-refresh.png)\n\nYou tapped on one product, so there should be **one** Yoga Mat line with quantity **3**. Instead the cart contains **three** lines of quantity 1. The simulated store shows the same thing (`npm run db:inspect`).\n\n**Expected:** one line per product per cart, with the right quantity, in the UI **and** in the simulated store. Fixing only the UI is not enough: the stored data itself is wrong.\n\n### Problem 3: The cart can hold more than is in stock (overselling)\n\nThe **Dumbbell Set** has only **3** in stock (the catalog says \"Only 3 left\"). Tap **Add to cart** on it **exactly 5 times as fast as you can**, then refresh and look at the cart:\n\n| Catalog | Cart | Checkout |\n|---|---|---|\n| ![Catalog showing Only 3 left on the Dumbbell Set](/questions/flipkart-cart-lab/img/04-catalog-only-3-left.png) | ![Cart holding 5 Dumbbell Sets](/questions/flipkart-cart-lab/img/05-oversold-cart.png) | ![Checkout fails with an out-of-stock message](/questions/flipkart-cart-lab/img/06-checkout.png) |\n\nThe cart now holds **5** dumbbells for a product with a stock of 3, and checkout fails with \"An item in your cart just went out of stock\", a nasty surprise for the customer.\n\n**Expected:** at most 3 taps succeed. The rest must be rejected with HTTP `409 OUT_OF_STOCK` (the UI already knows how to show that message).\n\n> The screenshots above are from the real reference lab this question is ported from -- the same three bugs, reproduced the same way. One difference: the reference's hand-tapping technique for Problem 1 doesn't carry over cleanly into a browser sandbox, which is exactly why `npm run repro -- stale` exists (section 3).\n\n### Good to know (these are not extra bugs)\n\n- **+, minus and Remove act on the whole product.** They replace or delete *every* line of that product, not only the one you clicked. With the duplicate lines from Problem 2, pressing **+** on one line collapses all three lines into a single line, and the badge drops. That is a knock-on effect of Problem 2: once there is one line per product these buttons behave as you would expect, so you do not need to change them.\n- **A route that throws gets answered, it does not crash the server.** If something rejects a duplicate row (for example after you add a uniqueness guard), the simulated backend replies `500 INTERNAL` and keeps running -- you'll see it in the Logs tab. The page shows \"Something went wrong. Please try again.\" A message there is a clue, not a new bug.\n\n## 3. Reproduce without clicking\n\nTapping fast enough to trigger Problems 2 and 3 by hand depends on your speed. To get the same result every time, use the Terminal tab:\n\n```\nnpm run repro -- stale   # problem 1 -- log in first, stay on the catalog page\nnpm run repro -- dup     # problem 2\nnpm run repro -- stock   # problem 3\nnpm run db:inspect       # look at what's actually stored\n```\n\nEach one sends a quick burst of real \"add to cart\" requests (60ms apart, through the same network path the app itself uses -- watch them land in the Network tab) and prints, for each response, the order it arrived in and what ended up in the simulated store. The rows each scenario creates are left there on purpose: run `npm run db:inspect` right after to look at them. Press **Run** to start over from a fresh store.\n\n### Why it is deterministic\n\nThe lab simulates a slow internal pricing service with **fixed**, not random, delays: the 1st, 2nd and 3rd request of a burst wait 800ms, 450ms and 100ms respectively, so responses come back in reverse order every time. That is why `npm run repro` always reproduces the same result, and why rapid hand-tapping doesn't.\n\n## 4. Your goal\n\nMake rapid taps behave correctly end to end:\n\n- [ ] The badge and the cart page always match the server, whatever order responses arrive in (problem 1)\n- [ ] There is exactly one cart line per product, in the UI and in the simulated store (problem 2)\n- [ ] The cart can never hold more units of a product than its stock (problem 3)\n- [ ] `npm test` passes (12 tests)\n- [ ] `npm run repro -- stale`, `-- dup` and `-- stock` all print clean results\n\nRules of the game: don't weaken the tests, and don't hide the symptom (for example by debouncing the button), because a second tab or device would still break it.\n\nStuck? Use the **Hints** button below -- hints are revealed one at a time, roughly in the order these problems appear.\n\n## 5. Tests\n\nRun `npm test` in the Terminal tab -- fast, unscored, and it re-bundles your current edits even if you haven't pressed Run. On the untouched code, 6 of 12 tests fail:\n\n| Failing test | Problem |\n|---|---|\n| client: `does not let a stale response overwrite a newer cart` | 1 |\n| `three rapid adds of the same product give ONE line with quantity 3` | 2 |\n| `rapid adds on top of an existing line do not lose increments` | 2 |\n| `the database itself rejects duplicate (cart, product) lines` | 2 |\n| `concurrent adds can never oversell the available stock` | 3 |\n| `checkout charges exactly what the cart shows and decrements stock` | knock-on effect of 2 and 3 |\n\nThe other tests already pass. They guard behaviour that must keep working while you fix things -- for example, an unexpected error inside add-to-cart gives a 500 and the server keeps running.\n\n**Submit** runs this same suite for real, server-side, and that real pass/fail is what's graded -- not an AI's read of your diff.\n\n## What's in the simulated store\n\nNo real database here -- `server-sim/db.js` holds everything in memory, reset fresh every time you press **Run**.\n\n| Table | Purpose |\n|---|---|\n| `products` | 7 products. `pricePaise` is the price in paise. `stock` is units available |\n| `carts` | One cart per user. `version` goes up by one on every change to that cart |\n| `cartItems` | The lines in a cart: `cartId`, `productId`, `quantity` |\n| `orders` | Placed orders -- a snapshot of what was bought and at what price |\n\nProducts with interesting stock levels for this question: **Yoga Mat** (id 43, stock 5) and **Dumbbell Set** (id 49, stock 3). Demo users: `asha@example.com` and `ravi@example.com`, password `password123`.\n\nLook inside with `npm run db:inspect` in the Terminal tab any time -- it prints the cart lines, which ones are duplicates, and the carts.",
   "visibility": {
     "src/context/CartContext.jsx": "editable",
     "server-sim/cartHandlers.js": "editable",
@@ -25,11 +53,11 @@
     "src/components/Header.jsx": "readonly",
     "src/components/Notice.jsx": "readonly",
     "src/components/AddToCartButton.jsx": "readonly",
-    "src/components/DebugPanel.jsx": "readonly",
     "src/pages/Login.jsx": "readonly",
     "src/pages/Catalog.jsx": "readonly",
     "src/pages/CartPage.jsx": "readonly",
     "src/pages/Checkout.jsx": "readonly",
+    "src/pages/Orders.jsx": "readonly",
     "server-sim/auth.js": "readonly",
     "server-sim/pricing.js": "readonly",
     "server-sim/orderHandlers.js": "readonly",
@@ -43,7 +71,7 @@
   },
   "rubric": [],
   "hints": [
-    "Open the app with ?debug=1 in the URL — a Request log panel appears showing every Add to cart response in the order it ARRIVED. Tap the same product three times fast and watch: does the badge end up matching the order you tapped, or the order the responses came back?",
+    "Log in, stay on the catalog, and type `npm run repro -- stale` in the Terminal tab. It taps Add to cart on the Yoga Mat three times and lets the responses come back newest-first, the way a slow network can. It prints the order the responses ARRIVED in and every number the header badge showed. Does the badge end on the cart's real total, or on whichever response happened to arrive last?",
     "That's Problem 1, in src/context/CartContext.jsx. Its mutate() function calls setCart() for whatever response arrives, with no way to tell a late (stale) response apart from the newest one.",
     "Refresh the page after a burst of taps and open the cart. Problem 2 lives where the cart is actually stored: server-sim/cartHandlers.js reads what the cart currently holds, then awaits a network-like delay, then writes — and nothing stops two requests from both reading before either writes.",
     "Fixing cartHandlers.js alone isn't the whole fix for Problem 2 — one of the tests inserts directly into the simulated database, bypassing your route entirely. Check server-sim/db.js: does anything stop two rows for the same (cart, product) pair from existing side by side?",

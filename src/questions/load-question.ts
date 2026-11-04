@@ -16,6 +16,16 @@ export interface QuestionMeta {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  /**
+   * Optional markdown problem statement, rendered in the left pane in place
+   * of the plain-text scenario/symptom blocks (see render-markdown.tsx and
+   * SolveScreen.tsx). Absent on every question except flipkart-cart-lab,
+   * whose question.json's description is the real reference lab's own
+   * README, adapted to this platform -- scenario/symptom stay populated
+   * regardless, since the question list page (app/page.tsx) still uses
+   * `scenario` for its card summary.
+   */
+  description?: string;
   visibility: Record<string, Visibility>;
   rubric: RubricCriterion[];
   /** Ordered least to most revealing. Never sent in the initial learner payload -- see toLearnerQuestion. */
@@ -34,6 +44,20 @@ export interface QuestionMeta {
    * to the learner as an ordinary readonly file (see toLearnerQuestion).
    */
   testEntry?: string;
+  /**
+   * Question-declared terminal commands (the Terminal tab's non-platform-native
+   * set). `command` is the exact string a learner types; `id` is the key into
+   * mock/handlers.js's `terminalHandlers` export, which actually runs it inside
+   * the preview iframe (see src/preview/devtools-source.ts). Metadata only --
+   * the server never executes question files.
+   */
+  terminalCommands?: TerminalCommand[];
+}
+
+export interface TerminalCommand {
+  id: string;
+  command: string;
+  help: string;
 }
 
 export interface LoadedQuestion {
@@ -81,9 +105,11 @@ export interface LearnerQuestion {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  description?: string;
   files: QuestionFile[];
   gradingMode?: 'llm' | 'tests';
   testEntry?: string;
+  terminalCommands?: TerminalCommand[];
 }
 
 /**
@@ -108,8 +134,10 @@ export function toLearnerQuestion(loaded: LoadedQuestion): LearnerQuestion {
     handlersPath: meta.handlersPath,
     scenario: meta.scenario,
     symptom: meta.symptom,
+    description: meta.description,
     files: loaded.questionFiles.filter((f) => f.visibility !== 'hidden'),
     gradingMode: meta.gradingMode,
     testEntry: meta.testEntry,
+    terminalCommands: meta.terminalCommands,
   };
 }

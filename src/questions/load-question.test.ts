@@ -84,3 +84,10 @@ test('the learner payload does carry what the solve screen needs', async () => {
   ]);
   expect(learner.files.some((f) => f.visibility === 'editable')).toBe(true);
 });
+
+test('toLearnerQuestion forwards terminalCommands (an allow-list field, so it must be named)', async () => {
+  const loaded = await loadQuestion('flipkart-cart');
+  const terminalCommands = [{ id: 'db-inspect', command: 'npm run db:inspect', help: 'print the tables' }];
+  const learner = toLearnerQuestion({ ...loaded, meta: { ...loaded.meta, terminalCommands } });
+  expect(learner.terminalCommands).toEqual(terminalCommands);
+});

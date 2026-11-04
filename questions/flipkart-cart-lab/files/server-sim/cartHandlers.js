@@ -1,5 +1,7 @@
 // Ported from the real lab's server/routes/cart.js. This is the learner's
 // code to fix -- Problems 2 and 3 both live in postItems below.
+import { serverLog } from '../__devtools__.js';
+
 const MAX_PER_ADD = 10;
 
 export function getCart(store, userId) {
@@ -21,15 +23,18 @@ export async function postItems(store, pricing, userId, body) {
   // that keeps reflecting whatever a sibling request does to the row later.
   const existing = store.findCartItem(cart.id, productId);
   const existingQtyAtReadTime = existing?.quantity ?? 0;
+  serverLog('info', `postItems: read cart ${cart.id} -> ${existingQtyAtReadTime} of product ${productId}`);
 
   // Ask the pricing service for the live price and stock. This is the only
   // await between the read above and the write below -- the whole reason
   // a race is possible at all.
   const product = await pricing.quote(productId);
   if (!product) return { status: 404, body: { error: 'NOT_FOUND' } };
+  serverLog('info', `postItems: pricing replied for product ${productId} (stock ${product.stock})`);
 
   const nextQty = existingQtyAtReadTime + qty;
   if (nextQty > product.stock) {
+    serverLog('warn', `postItems: rejected product ${productId}, ${nextQty} > stock ${product.stock} (409)`);
     return {
       status: 409,
       body: {
@@ -46,6 +51,7 @@ export async function postItems(store, pricing, userId, body) {
     store.insertCartItemDirect(cart.id, productId, qty);
   }
   store.bumpVersion(cart.id);
+  serverLog('info', `postItems: wrote product ${productId} quantity ${nextQty}, cart ${cart.id} now v${cart.version}`);
 
   return { status: 200, body: store.loadCart(cart.id) };
 }

@@ -10,6 +10,7 @@ import {
   stripNamespaceEverywhere,
   VIRTUAL_NAMESPACE,
 } from '../bundling/resolve';
+import { DEVTOOLS_VIRTUAL, devtoolsModuleFor } from '../preview/devtools-source';
 import { INTERCEPTOR_MODULE } from '../preview/interceptor-source';
 import type { TestResult } from '../testing/browser-test-harness';
 import type { SubmittedFile } from '../types';
@@ -78,6 +79,11 @@ export async function executeTests(
   // one source of truth, not a second mock just for grading.
   if (handlersPath) {
     map.set(INTERCEPTOR_VIRTUAL, INTERCEPTOR_MODULE.replace('./__HANDLERS__', `./${handlersPath}`));
+    // Question files import '../__devtools__.js' (serverLog). The SAME module
+    // the preview bundles, not a stripped fork: its terminal-run listener is
+    // simply never triggered during Submit. Not imported from the entry --
+    // it only needs to be resolvable.
+    map.set(DEVTOOLS_VIRTUAL, devtoolsModuleFor(handlersPath));
   }
   map.set(
     ENTRY_VIRTUAL,
