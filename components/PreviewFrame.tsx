@@ -321,7 +321,16 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
         ref={iframeRef}
         src="/preview/frame.html"
         title="App preview"
-        sandbox="allow-scripts allow-modals"
+        // allow-forms: without it, real Chrome never dispatches a sandboxed
+        // iframe's form 'submit' event at all (confirmed live -- clicking
+        // Login produced no network request and no error, in either the
+        // click or Enter-key path; the same code logs in fine in the
+        // unsandboxed "Open in new tab" popup). allow-same-origin is
+        // deliberately still absent: that one DOES matter for isolation
+        // (it would give the iframe's localStorage/cookies the same origin
+        // as this app), and nothing here needs it -- login already works
+        // via an in-memory token (api.js's getToken/setToken), not cookies.
+        sandbox="allow-scripts allow-modals allow-forms"
         style={{ width: '100%', height: '100%', border: 0, background: '#fff' }}
       />
       {testRunKey !== null ? (
