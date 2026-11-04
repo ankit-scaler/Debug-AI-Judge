@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "ClaudeInChromeDomain(localhost:3123)",
+      "ClaudeInChromeDomain(localhost:3125)",
+      "Bash(cat)",
+      "Bash(cp /tmp/flipkart-suite-check.mts ./flipkart-suite-check.mts)",
+      "Bash(cp /tmp/flipkart-suite-check2.mts ./flipkart-suite-check2.mts)"
+    ]
+  }
+}
