@@ -161,3 +161,39 @@ a duplicate of it -- they are two different limitations:
   Verified live after the fix: login completes, and
   `npm run repro -- stale` drives the real badge through 0 -> 3 -> 2 -> 1
   with the real `BUG` report, exactly as designed.
+
+**Correction, logged against this note:** "login completes" above was true
+but incomplete -- it was verified only as far as the login *request*
+succeeding and the header updating, not that anything authenticated
+afterward actually worked. It didn't: see the next section. Treat this as
+the record of what was actually checked at the time, not as evidence the
+full flow worked -- it didn't, until the fix below.
+
+## Second sandbox bug: the auth token never persisted, so everything after login 401'd (2026-11-04)
+
+Found live-testing the full learner flow after the fix above, not during
+it: logging in made the header show "Logout (Asha)", but **every
+subsequent authenticated call failed with a real 401** -- Add to cart
+showed "Something went wrong", the cart page silently showed "Your cart is
+empty", and Orders silently showed "No orders yet". All three are the same
+root cause, not three bugs.
+
+`src/api.js`'s `getToken()`/`setToken()` stored the token only in
+`localStorage`, in a try/catch that silently swallows any throw. The
+embedded iframe's sandbox correctly still lacks `allow-same-origin`
+(`allow-scripts` + `allow-same-origin` together is a known sandbox-escape
+combination, and this iframe runs learner-submitted code -- adding it
+would have been the wrong fix). Without it, `localStorage` throws with an
+opaque-origin iframe, so `setToken()` silently no-opped and every later
+`getToken()` returned `null` -- `AuthContext.jsx`'s `login()` sets React
+state (`setUser`) from the login response regardless of whether the token
+actually persisted, which is why the header looked logged in while nothing
+authenticated afterward worked.
+
+**Fix:** `src/api.js` gained an in-memory `memoryToken` fallback that
+`getToken()`/`setToken()` use when `localStorage` throws -- the token
+survives for the rest of that preview session (lost on a hard reload, same
+as any other React state there), without touching the sandbox attribute at
+all. Verified live end-to-end afterward: login, Add to cart, cart page
+showing the real line item, checkout, and Order #1 appearing on the Orders
+page all work correctly in the embedded preview now.

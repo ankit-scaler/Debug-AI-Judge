@@ -1,17 +1,29 @@
 const TOKEN_KEY = 'fk_token';
 
+// The embedded preview iframe is sandboxed without allow-same-origin (and
+// that's deliberate -- allow-scripts + allow-same-origin together is a
+// known sandbox-escape combination, and this iframe runs learner-submitted
+// code). localStorage throws there, so it can't be the only place the token
+// lives: this in-memory fallback is what actually keeps a learner logged in
+// across every api() call after login() in the embedded preview. It's lost
+// on a hard reload, same as any other in-memory React state in this preview
+// -- real persistence only happens when localStorage actually works (the
+// "Open in new tab" popup, a normal unsandboxed origin).
+let memoryToken = null;
+
 export const getToken = () => {
   try {
     return localStorage.getItem(TOKEN_KEY);
   } catch {
-    return null;
+    return memoryToken;
   }
 };
 export const setToken = (t) => {
+  memoryToken = t;
   try {
     t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY);
   } catch {
-    /* storage unavailable */
+    /* storage unavailable -- memoryToken above is what actually matters here */
   }
 };
 
