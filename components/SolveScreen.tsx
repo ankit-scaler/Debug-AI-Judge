@@ -15,6 +15,7 @@ import type { SubmitResult } from './ResultCard';
 import type { TerminalLine } from './TerminalPanel';
 import styles from './solve.module.css';
 import { useTheme } from './useTheme';
+import { renderMarkdown } from '@/src/markdown/render-markdown';
 import { bundlePreview, type PreviewBuildError } from '@/src/preview/bundler';
 import { bundleTests } from '@/src/preview/test-bundler';
 import type { TestResult } from '@/src/testing/browser-test-harness';
@@ -38,6 +39,7 @@ export interface LearnerQuestionProps {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  description?: string;
   files: LearnerFile[];
   gradingMode?: 'llm' | 'tests';
   testEntry?: string;
@@ -426,11 +428,17 @@ export function SolveScreen({ question }: { question: LearnerQuestionProps }) {
           <p className={styles.company}>{question.company}</p>
           <h1 className={styles.title}>{question.title}</h1>
 
-          <p className={styles.sectionLabel}>Scenario</p>
-          <p className={styles.prose}>{question.scenario}</p>
+          {question.description ? (
+            renderMarkdown(question.description)
+          ) : (
+            <>
+              <p className={styles.sectionLabel}>Scenario</p>
+              <p className={styles.prose}>{question.scenario}</p>
 
-          <p className={styles.sectionLabel}>Reported symptom</p>
-          <p className={styles.symptom}>{question.symptom}</p>
+              <p className={styles.sectionLabel}>Reported symptom</p>
+              <p className={styles.symptom}>{question.symptom}</p>
+            </>
+          )}
 
           <div className={styles.tagRow}>
             <span className={styles.tag}>{question.difficulty}</span>

@@ -16,6 +16,16 @@ export interface QuestionMeta {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  /**
+   * Optional markdown problem statement, rendered in the left pane in place
+   * of the plain-text scenario/symptom blocks (see render-markdown.tsx and
+   * SolveScreen.tsx). Absent on every question except flipkart-cart-lab,
+   * whose question.json's description is the real reference lab's own
+   * README, adapted to this platform -- scenario/symptom stay populated
+   * regardless, since the question list page (app/page.tsx) still uses
+   * `scenario` for its card summary.
+   */
+  description?: string;
   visibility: Record<string, Visibility>;
   rubric: RubricCriterion[];
   /** Ordered least to most revealing. Never sent in the initial learner payload -- see toLearnerQuestion. */
@@ -95,6 +105,7 @@ export interface LearnerQuestion {
   handlersPath?: string;
   scenario: string;
   symptom: string;
+  description?: string;
   files: QuestionFile[];
   gradingMode?: 'llm' | 'tests';
   testEntry?: string;
@@ -123,6 +134,7 @@ export function toLearnerQuestion(loaded: LoadedQuestion): LearnerQuestion {
     handlersPath: meta.handlersPath,
     scenario: meta.scenario,
     symptom: meta.symptom,
+    description: meta.description,
     files: loaded.questionFiles.filter((f) => f.visibility !== 'hidden'),
     gradingMode: meta.gradingMode,
     testEntry: meta.testEntry,
