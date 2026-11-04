@@ -89,3 +89,75 @@ split the real lab's own README documents.
   completion order is the reverse of send order. Fixing that means moving the
   simulated latency from pricing.js to the response (like the reference) and
   re-validating the whole test suite -- a separate change.
+
+## Problem statement authored from the real README (2026-11-04)
+
+`question.json`'s `description` field is now the real reference lab's own
+`README.md`, adapted and rendered in the left pane (`src/markdown/`, a
+hand-rolled markdown subset -- see its own file header for exactly what it
+supports). `scenario`/`symptom` are kept as-is alongside it: `app/page.tsx`'s
+question-list card still uses `scenario` for its summary, and `description`
+is additive, not a replacement of those fields.
+
+Checked against the actual reference repo on disk (not the README text
+alone) for anything it points at that this question didn't already have:
+
+- **`docs/img/*.png` (6 screenshots) -- included for real.** Copied to
+  `public/questions/flipkart-cart-lab/img/`, referenced from the description
+  in the same side-by-side table layout the README itself uses. This was a
+  genuine gap, not a deliberate drop.
+- **`docs/LAB.md` (the hints file) -- not copied as a file.** Its content
+  already exists, differently shaped, as this question's own `hints` array
+  and the left pane's progressive "Show next hint" button -- checked
+  content-for-content and nothing in `LAB.md` is missing: hint 1 ↔ its
+  Hint 1, hint 2 ↔ its Hint 5, hint 3 ↔ its Hints 2/3, hint 4 ↔ its Hint 4,
+  hint 5 ↔ its Hint 6. Shipping a second, static copy of the same hints
+  would just be a second source of truth that could drift from the real
+  one. The description points at the Hints button instead.
+- **`database/README.md` (the schema explanation) -- content included, not
+  as a separate file.** Folded into the description as "What's in the
+  simulated store", written from this question's actual `server-sim/db.js`
+  data (7 products, not the real lab's 10; Yoga Mat id 43 stock 5 and
+  Dumbbell Set id 49 stock 3 match the real lab exactly). Not a separate
+  file because there's no "browse reference docs" surface here outside the
+  one description pane -- a `database/README.md`-shaped file sitting in the
+  question's file tree would be out of place next to the learner's actual
+  editable/readonly code, which is the one thing that tree is for
+  everywhere else on this platform.
+- **`database/schema.sql`/`seed.sql`/`data/shop.db`, `scripts/repro.js`,
+  `scripts/db.js`, `server/`, `client/` -- not applicable or already
+  ported.** No real database or server can run in this sandbox at all;
+  `server-sim/`, `mock/`, `src/` are the already-built substitutes, and the
+  terminal's `repro -- stale/dup/stock`/`db:inspect` commands are already
+  the port of `scripts/repro.js`/`scripts/db.js`. Nothing to add.
+- The real README's `PRICING_MS`/`JITTER` env-var table (the "bugs vanish
+  on a fast laptop" demonstration) is a **deliberate drop**: there are no
+  environment variables to set in a browser sandbox, and there's no
+  platform-native equivalent to swap it for. The fixed 800/450/100ms delays
+  and *why* they're fixed (determinism, not realism) are kept in the
+  description, since that's the actual pedagogical point; only the
+  "turn it off and watch it vanish" demo itself is dropped.
+
+## Sandbox fix: login now works in the embedded preview (2026-11-04)
+
+The embedded preview iframe's `sandbox` was missing `allow-forms`
+(`components/PreviewFrame.tsx`), which silently blocked `Login.jsx`'s form
+submission in real Chrome -- confirmed live via two independent input paths
+(click and Enter-key), and isolated to the sandbox by testing the identical
+code in the unsandboxed "Open in new tab" popup, where it worked. Fixed by
+adding `allow-forms` to that one iframe's sandbox list.
+
+This is a correction to the "Known consequence, NOT fixed" note above, not
+a duplicate of it -- they are two different limitations:
+
+- **Still true, unrelated to the sandbox fix:** a learner tapping *by hand*
+  in the live preview generally won't see Problem 1, because of the
+  response-timing difference explained above. `npm run repro -- stale`
+  exists specifically to route around this.
+- **No longer true, fixed by `allow-forms`:** before this fix, a learner
+  could not log in through the embedded preview's UI *at all* -- which also
+  meant `npm run repro -- stale` itself could never run there (it requires
+  being logged in through the real UI by design) and neither could Hint 1.
+  Verified live after the fix: login completes, and
+  `npm run repro -- stale` drives the real badge through 0 -> 3 -> 2 -> 1
+  with the real `BUG` report, exactly as designed.
