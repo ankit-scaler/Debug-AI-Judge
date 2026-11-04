@@ -8,6 +8,7 @@ import { createPricingService } from '../server-sim/pricing.js';
 import { getCart, postItems, patchItem, deleteItem } from '../server-sim/cartHandlers.js';
 import { postOrder } from '../server-sim/orderHandlers.js';
 import { __setFetchOverride } from '../src/api.js';
+import { serverLog } from '../__devtools__.js';
 
 const store = createStore();
 let pricing = createPricingService(store);
@@ -40,6 +41,11 @@ function safe(fn) {
     try {
       return await fn(req);
     } catch (err) {
+      // Without this, a thrown error is invisible everywhere -- the learner
+      // sees only "Something went wrong" in the UI and a 500 in Network,
+      // with nothing in Logs to point at why. serverLog is what the
+      // description promises ("you'll see it in the Logs tab").
+      serverLog('error', `${req.method} ${req.url}: ${err instanceof Error ? err.message : String(err)}`);
       return { status: 500, body: { error: 'INTERNAL' } };
     }
   };
