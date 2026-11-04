@@ -24,6 +24,18 @@ describe('parseCommand', () => {
     expect(parseCommand('npm test', [], true)).toEqual({ ok: true, command: { kind: 'npm-test' } });
   });
 
+  test('npm run test is accepted as an alias for npm test', () => {
+    // Every question-declared command already uses the "npm run <x>" form
+    // (npm run repro -- dup, npm run db:inspect), and npm run dev is the
+    // platform-native form for 'run' too -- npm test being the one bare
+    // exception is a trap, not a feature, so npm run test works the same.
+    expect(parseCommand('npm run test', [], false)).toEqual({
+      ok: false,
+      message: 'npm test: no test script found',
+    });
+    expect(parseCommand('npm run test', [], true)).toEqual({ ok: true, command: { kind: 'npm-test' } });
+  });
+
   test('matches a question-declared command by its exact command string', () => {
     expect(parseCommand('npm run repro -- dup', declared, true)).toEqual({
       ok: true,

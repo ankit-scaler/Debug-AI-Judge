@@ -21,7 +21,7 @@ export function parseCommand(
 
   if (trimmed === 'npm run dev') return { ok: true, command: { kind: 'run' } };
   if (trimmed === 'git diff') return { ok: true, command: { kind: 'git-diff' } };
-  if (trimmed === 'npm test') {
+  if (trimmed === 'npm test' || trimmed === 'npm run test') {
     if (!hasTests) return { ok: false, message: 'npm test: no test script found' };
     return { ok: true, command: { kind: 'npm-test' } };
   }
