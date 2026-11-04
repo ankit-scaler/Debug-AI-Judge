@@ -103,6 +103,23 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
 ) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const popupRef = useRef<Window | null>(null);
+  // The live iframe's `src` is server-rendered as part of the page's initial
+  // HTML (this is a 'use client' component, but still rendered server-side
+  // for its first paint). That means the browser can start loading
+  // frame.html -- and frame.html can post its one-shot 'frame-ready' message
+  // -- before React has finished hydrating and attached the onMessage
+  // listener below, which only happens inside a useEffect. A message posted
+  // to a window with no listener yet is simply lost, with no retry from
+  // frame.html's side, so the very first load silently never completes
+  // (confirmed live: "Starting the preview" forever, with zero evidence of
+  // 'frame-ready' ever being received, until a later Run click -- a purely
+  // client-side state change -- mounts a new iframe well after hydration).
+  // `mounted` starts false (matching SSR, so hydration itself doesn't warn
+  // about a mismatch) and flips true in an effect that runs after the
+  // onMessage-attaching effect below, so the iframe's real `src` -- and
+  // therefore any chance of it loading -- is never rendered until the
+  // listener that needs to hear from it already exists.
+  const [mounted, setMounted] = useState(false);
   // The third target, alongside the iframe and the popup: a hidden iframe
   // that exists only while an `npm test` run is in flight. testRunKey is its
   // React key -- a new number mounts a brand-new document; null unmounts it.
@@ -145,6 +162,9 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
   // which is the common case, not the edge case.
   const gateRef = useRef<ReadyGate<RunPayload> | null>(null);
   gateRef.current ??= new ReadyGate<RunPayload>(send);
+  // Tracks which runToken the gate was last reset() for -- see the bundling
+  // effect below for why this exists.
+  const resetForTokenRef = useRef<number | null>(null);
 
   useImperativeHandle(
     ref,
@@ -270,6 +290,13 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
     return () => window.removeEventListener('message', onMessage);
   }, [onConsole, onNetwork, onServerLog, onTerminalOutput, onTestResults, sendToPopup]);
 
+  // Runs after the effect above (hook order), so the listener it needs
+  // already exists by the time this flips `mounted` true and the iframe
+  // below gets a real `src` to load for the first time.
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   // Bundle on demand and hand the result to the gate, which sends it the
   // moment both the bundle and the (possibly not-yet-loaded) iframe are ready,
   // regardless of which one finishes first. Also mirrored to an open popup.
@@ -280,7 +307,21 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
     // document that has not announced itself yet. Reset the gate so a ready
     // signal left over from the PREVIOUS iframe generation can never cause
     // code to be posted into a frame that has not loaded its listener yet.
-    gateRef.current!.reset();
+    //
+    // Only reset when runToken has actually changed since the last reset.
+    // In dev, React StrictMode runs this effect twice in a row for the SAME
+    // runToken (mount, simulated cleanup, mount again) without ever
+    // destroying the real iframe DOM node in between (key is unchanged) --
+    // so there is still only ever one real 'frame-ready' message for that
+    // generation. Resetting unconditionally on the second invocation could
+    // wipe out that single real signal if it happened to arrive between the
+    // two invocations, leaving the gate stuck at ready=false forever (the
+    // iframe never sends a second 'frame-ready', because it never reloads)
+    // -- a blank preview that never recovers, confirmed live in dev.
+    if (resetForTokenRef.current !== runToken) {
+      gateRef.current!.reset();
+      resetForTokenRef.current = runToken;
+    }
 
     async function build() {
       onStatus({ building: true, errors: [] });
@@ -319,7 +360,11 @@ export const PreviewFrame = forwardRef<PreviewFrameHandle, PreviewFrameProps>(fu
         // reload. This makes every run that reload, unconditionally.
         key={runToken}
         ref={iframeRef}
-        src="/preview/frame.html"
+        // undefined (not server-rendered, see `mounted` above) until the
+        // onMessage listener is guaranteed attached -- only then is it safe
+        // for the browser to start loading a document that posts a message
+        // the moment it finishes.
+        src={mounted ? '/preview/frame.html' : undefined}
         title="App preview"
         // allow-forms: without it, real Chrome never dispatches a sandboxed
         // iframe's form 'submit' event at all (confirmed live -- clicking
