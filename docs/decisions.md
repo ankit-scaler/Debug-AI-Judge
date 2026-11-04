@@ -505,3 +505,15 @@ record rather than from memory.
   tests (3 generic auth-edge-case tests not tied to any of the three bugs
   were trimmed; noted in the question's own hidden author notes, not just
   here).
+
+## 2026-11-04 — DevTools terminal
+
+### D29. A typed terminal replaces Conditions/Data/Diff; `npm test` runs client-side in a hidden iframe
+
+- **Decision:** Bottom panel becomes Logs (Client/Server filter) | Network (Table/Timeline) | Terminal | Results | Solution. The terminal offers platform-native `npm run dev`, `npm test` (only for `gradingMode: 'tests'` with a `testEntry`), `git diff`, `ls`, `cat`, `clear`, `help`, plus commands a question declares in `question.json` `terminalCommands` and implements in `mock/handlers.js` `terminalHandlers`. Spec: `docs/superpowers/specs/2026-11-03-devtools-expansion-design.md`; plan: `docs/superpowers/plans/2026-11-03-devtools-terminal.md`.
+- **`npm test` runs in a fresh hidden iframe per run, not the live preview** (deliberate departure from the spec, approved by the owner). The test bundle carries its own store and fetch interceptor; running it in the live iframe would repoint the learner's running app at the test run's throwaway backend. It never touches scoring; Submit's server-side `executeTests()` stays the only scored path.
+- **`__devtools__.js` is registered in all three bundlers** that reach question files (`bundlePreview`, `executeTests`, `bundleTests`), and imported through a namespace import so questions without `terminalHandlers` still bundle.
+- **`terminal-run` carries a `runId`**, and Run/Reset cancel any in-flight command, so a late result is never shown as the new code's output. Scrollback is kept across Run/Reset, with a separator line.
+- **Logs is one array tagged `source: 'client' | 'server'`**, filtered at render time, not two merged arrays.
+- **Hand-rolled LCS line diff** for `git diff`, so no new dependency.
+- **Rejected:** running tests in the live iframe (side effects above); a diff library (new dependency); a component-test setup for TerminalPanel (new dependency; terminal wiring is verified live instead).
