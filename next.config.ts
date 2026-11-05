@@ -20,6 +20,21 @@ const nextConfig: NextConfig = {
   // static-resolution failure entirely. See D25.
   serverExternalPackages: ['esbuild', 'esbuild-wasm'],
 
+  // src/grading/execute-tests.ts reads this file's raw text at REQUEST time
+  // (`readFileSync`, to bundle it as a virtual module alongside a learner's
+  // submission) rather than importing it -- it has to stay real, readable
+  // TypeScript source, not compiled output. Next.js's build-time file tracer
+  // (@vercel/nft) statically analyses `import`/`require`, but a `fs` read
+  // built from `join(process.cwd(), ...)` is exactly the case its own docs
+  // warn it can miss -- confirmed live: Submit on the deployed site crashed
+  // every time with an empty 500 (ENOENT on this file, never reaching the
+  // route's own error handling) until this was added. `/*` (every route) is
+  // the documented pattern for "a file one specific route's trace missed";
+  // the include itself stays narrow (one file, not a directory glob).
+  outputFileTracingIncludes: {
+    '/*': ['src/testing/browser-test-harness.ts'],
+  },
+
   async headers() {
     return [
       {
