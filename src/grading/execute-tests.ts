@@ -1,4 +1,17 @@
 import * as esbuild from 'esbuild';
+// jsdom is pinned to an EXACT version (package.json), not a range: 28.0.0+
+// depends on html-encoding-sniffer@^6, and 30.x (where this was until this
+// pin) pulls html-encoding-sniffer@^7 -> @exodus/bytes, which is pure ESM.
+// html-encoding-sniffer@7's own require() of it only works via Node's
+// require(esm) interop, which it gates behind engines: "^22.13.0 || >=24.0.0"
+// -- confirmed live: Vercel's deployed function runtime doesn't satisfy that,
+// so just `import { JSDOM } from 'jsdom'` crashed at module-evaluation time
+// with ERR_REQUIRE_ESM, before this file's own code (or the route's
+// try/catch around executeTests()) ever ran. 27.0.0 is the newest version
+// still on html-encoding-sniffer@^4 (whatwg-encoding only, no @exodus/bytes,
+// engines >=20) and has a byte-identical getInternalVMContext()/runScripts
+// implementation to 30.1.3 -- confirmed by diffing lib/api.js directly.
+// Bumping this past 27.x needs the same check repeated first.
 import { JSDOM } from 'jsdom';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
