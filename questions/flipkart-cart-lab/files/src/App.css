@@ -279,3 +279,13 @@ main {
   display: grid;
   gap: 12px;
 }
+
+/* ---- Debug panel (?debug=1) ---- */
+
+.debug-panel { position: fixed; right: 12px; bottom: 12px; width: 360px; background: #111827; color: #e5e7eb; border-radius: 8px; padding: 12px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.3); z-index: 10; }
+.debug-panel .link { color: #93c5fd; }
+.debug-panel .muted { color: #9ca3af; font-size: 11px; }
+.debug-panel table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+.debug-panel th, .debug-panel td { text-align: left; padding: 2px 6px; border-bottom: 1px solid #374151; }
+.debug-head { display: flex; justify-content: space-between; }
+.debug-badge { margin: 6px 0; font-size: 13px; }

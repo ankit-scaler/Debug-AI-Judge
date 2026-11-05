@@ -35,6 +35,15 @@ export class ApiError extends Error {
   }
 }
 
+// Tiny event hook used only by the ?debug=1 panel (components/DebugPanel.jsx).
+const listeners = new Set();
+let sentCounter = 0;
+export const onApiEvent = (fn) => {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+};
+const emit = (e) => listeners.forEach((fn) => fn(e));
+
 // Test-only hook (used by tests/CartContext.test.jsx, and by the
 // `npm run repro -- stale` terminal command in mock/handlers.js) to control exactly when
 // each response arrives, independent of the mock server's own timing --
@@ -49,6 +58,9 @@ export function __setFetchOverride(fn) {
 export async function api(method, path, body) {
   const token = getToken();
   const doFetch = fetchOverride || fetch;
+  const sentAs = ++sentCounter;
+  const startedAt = performance.now();
+  emit({ phase: 'sent', sentAs, method, path });
   const res = await doFetch(path, {
     method,
     headers: {
@@ -58,6 +70,17 @@ export async function api(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
+  emit({
+    phase: 'done',
+    sentAs,
+    method,
+    path,
+    status: res.status,
+    ms: Math.round(performance.now() - startedAt),
+    version: data.version,
+    itemCount: data.itemCount,
+    lines: data.items?.length,
+  });
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
 }
