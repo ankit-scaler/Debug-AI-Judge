@@ -5,6 +5,16 @@ import { loadQuestion } from '@/src/questions/load-question';
 import { localGradeDeps, localSpend } from '@/src/server/local-deps';
 import type { SubmittedFile } from '@/src/types';
 
+// Without this, Vercel kills the function at its own platform default (10s
+// on Hobby) -- shorter than executeTests()'s own 20s budget below.
+// Confirmed live: after fixing the file-tracing crash (see the
+// outputFileTracingIncludes comment in next.config.ts), Submit on the
+// deployed site still failed with the same empty-500 symptom, but now at
+// ~10.6s instead of ~0.3s -- the platform timeout, not anything this route
+// or executeTests() itself returns. 60s gives real headroom above the 20s
+// test budget for cold-start + esbuild + jsdom setup overhead on top of it.
+export const maxDuration = 60;
+
 /** What the browser is allowed to learn about a submission. */
 type SubmitResponse =
   | {
