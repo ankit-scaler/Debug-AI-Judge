@@ -84,7 +84,24 @@ export async function POST(request: Request, ctx: { params: Promise<{ slug: stri
     // 20s, not the (already-raised) 15s default: this is the production
     // path, and a suite that renders real components has little margin to
     // spare on a loaded server.
-    const executed = await executeTests(merged, loaded.meta.testEntry, loaded.meta.handlersPath, 20000);
+    //
+    // Unlike grade() (the LLM path, which catches its own risky call and
+    // returns a typed system_error), executeTests() had no such guard here
+    // -- confirmed live: a missing-file crash inside it became an unhandled
+    // exception, which Vercel turned into a bare empty-bodied 500 the
+    // client's response.json() then failed to parse ("Unexpected end of
+    // JSON input"). The learner's code was never at fault; nothing here
+    // should ever reach them as anything but a clean, parseable JSON error.
+    let executed;
+    try {
+      executed = await executeTests(merged, loaded.meta.testEntry, loaded.meta.handlersPath, 20000);
+    } catch (err) {
+      console.error(`[submit] executeTests threw for "${slug}": ${(err as Error).message}`);
+      return Response.json({
+        status: 'system_error',
+        message: 'Grading failed for a technical reason. Your code is safe — try again.',
+      } satisfies SubmitResponse);
+    }
 
     if (executed.status === 'build_failed') {
       return Response.json(
