@@ -31,8 +31,21 @@ const nextConfig: NextConfig = {
   // route's own error handling) until this was added. `/*` (every route) is
   // the documented pattern for "a file one specific route's trace missed";
   // the include itself stays narrow (one file, not a directory glob).
+  //
+  // esbuild itself is the other half of this same class of bug: it's listed
+  // as a server-external package above (so Next.js require()s it directly
+  // instead of bundling it via webpack/turbopack), and its real work happens
+  // through a *native binary* that the package resolves to at a platform-
+  // specific path at runtime (node_modules/@esbuild/<platform>-<arch>/bin/
+  // esbuild) -- exactly the "native/runtime asset" shape the Next.js docs'
+  // own outputFileTracingIncludes example calls out by name (their example
+  // uses `sharp`/`aws-crt`; esbuild has the identical structure). A build-
+  // time-only, per-OS-architecture binary that a route's own dependency
+  // resolves to is precisely the kind of thing a static import/require
+  // trace can under-include, so it's included explicitly here too, for the
+  // same reason and by the same mechanism as the harness file above.
   outputFileTracingIncludes: {
-    '/*': ['src/testing/browser-test-harness.ts'],
+    '/*': ['src/testing/browser-test-harness.ts', 'node_modules/@esbuild/**', 'node_modules/esbuild/**'],
   },
 
   async headers() {
