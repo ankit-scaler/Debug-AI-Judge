@@ -67,9 +67,22 @@ split the real lab's own README documents.
   catalog's own Add-to-cart already exercises every bug class this question
   teaches (races/duplicates/oversell), and a detail page adds surface area with
   no pedagogical return.
-- `?debug=1`/`DebugPanel.jsx` (the reference's Request-log panel) is retired in
+- `?debug=1`/`DebugPanel.jsx` (the reference's Request-log panel): **restored**
+  (2026-11-05), reversing the note this replaced. It was originally retired in
   favor of the platform's Terminal tab, Logs tab (Server filter) and Network
-  tab (Timeline view), which generalize the same capability to every question.
+  tab (Timeline view), which generalize the same capability to every question
+  -- that reasoning still holds for *every other* question, and those tabs
+  are still the right first thing to point a learner at. But this question's
+  own description still named `?debug=1` (in code formatting, inviting a
+  learner to try it), and when the owner actually tried it and found it did
+  nothing, they asked for the real thing rather than just a wording fix, after
+  being told this reverses the earlier call. `src/debug.js` and
+  `src/components/DebugPanel.jsx` are verbatim ports of the reference's own
+  files (down to the exact CSS and the `onApiEvent`/`emit` hook in
+  `src/api.js`), not a new implementation. One real constraint, stated in the
+  description: it only works via "Open in new tab" -- the embedded preview's
+  iframe `src` never carries a query string, so there's nothing there for a
+  learner to type `?debug=1` into.
 - `npm run repro -- dup|stock` send real fetch() requests through the same
   interceptor the app uses (so they show in Network and Logs), 60ms apart, and
   report responses in true arrival order -- a port of the reference's
